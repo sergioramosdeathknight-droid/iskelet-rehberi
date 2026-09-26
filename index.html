@@ -1,0 +1,5448 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+  🦴  3D İSKELET SİSTEMİ REHBERİ  ·  v2.0  "Cihaz Uyumlu Sürüm"
+  ------------------------------------------------------------------------------
+  ÖZELLİKLER
+  · 5 bölgesel GLB paralel yüklenir, insan formunda pozisyonlanır
+  · Cihaz algılama: mobil / tablet / masaüstü — layout otomatik uyarlanır
+  · Yönelim (portre/yatay) algılama ve otomatik yeniden düzenleme
+  · Dokunmatik + mouse + kalem desteği (pointer events)
+  · Bölge → alt bölge → kemik detayı üç seviyeli gezinti
+  · PDF'ten kırpılmış görseller (images/) otomatik yüklenir
+  · Eksik GLB veya görsel sessizce tolere edilir, hata vermez
+  · Karanlık / aydınlık tema, tam ekran, tel kafes, otomatik döndürme
+  · Kamera animasyonları (ease-in-out)
+  · Arama, liste, istatistik sekmeleri
+  · Klavye kısayolları (masaüstü)
+  ------------------------------------------------------------------------------
+  KLASÖR YAPISI
+    iskelet-rehberi/
+    ├── index.html
+    ├── models/
+    │   ├── kafatasi.glb
+    │   ├── omurga.glb
+    │   ├── gogus.glb
+    │   ├── ust_ekstremite.glb
+    │   └── alt_ekstremite.glb
+    └── images/
+        ├── frontal.png  · parietal.png · temporal.png · ...
+        └── sesamoid.png
+  ------------------------------------------------------------------------------
+  ÇALIŞTIRMA
+    Klasörde terminal aç → python -m http.server 8000 → http://localhost:8000
+    (file:// ile açmayın, tarayıcı GLB yüklemeyi engeller)
+================================================================================
+-->
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e14" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)" />
+<meta name="description" content="İnteraktif 3D insan iskelet sistemi rehberi. 206 kemik, Latin ve Türkçe isimler, işlevler, günlük hayat etkileri ve klinik ipuçları." />
+<meta name="author" content="3D İskelet Rehberi" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="format-detection" content="telephone=no" />
+<title>🦴 3D İskelet Sistemi Rehberi · 206 Kemik</title>
+
+<!-- Kritik kaynakları önceden yükle -->
+<link rel="preconnect" href="https://unpkg.com" crossorigin />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preload" href="./models/kafatasi.glb" as="fetch" crossorigin />
+<link rel="preload" href="./models/omurga.glb" as="fetch" crossorigin />
+<link rel="preload" href="./models/gogus.glb" as="fetch" crossorigin />
+<link rel="preload" href="./models/ust_ekstremite.glb" as="fetch" crossorigin />
+<link rel="preload" href="./models/alt_ekstremite.glb" as="fetch" crossorigin />
+
+<style>
+/* ============================================================================
+   BÖLÜM 1 · TEMA DEĞİŞKENLERİ — KOYU (VARSAYILAN)
+   ============================================================================ */
+:root{
+  /* Renkler — arka plan */
+  --bg:            #0a0e14;
+  --bg-soft:       #0f141c;
+  --bg-elev:       #131a24;
+  --panel:         #111823;
+  --panel-2:       #182131;
+  --panel-3:       #1f2a3d;
+  --panel-hover:   #26324a;
+
+  /* Çizgiler */
+  --line:          #243044;
+  --line-soft:     #1a2433;
+  --line-strong:   #33415a;
+
+  /* Metin */
+  --txt:           #e6edf5;
+  --txt-soft:      #c5d0e0;
+  --txt-muted:     #8ea0ba;
+  --txt-faint:     #5f7089;
+
+  /* Vurgu */
+  --accent:        #ff5a5f;
+  --accent-2:      #38bdf8;
+  --accent-3:      #fbbf24;
+  --ok:            #22c55e;
+  --warn:          #f59e0b;
+  --danger:        #ef4444;
+  --info:          #0ea5e9;
+
+  /* Bölge renkleri */
+  --c-cranium:     #ff6b6b;
+  --c-face:        #feca57;
+  --c-ear:         #48dbfb;
+  --c-hyoid:       #1dd1a1;
+  --c-spine:       #a29bfe;
+  --c-thorax:      #ff9ff3;
+  --c-shoulder:    #54a0ff;
+  --c-arm:         #00d2d3;
+  --c-hand:        #9b7cff;
+  --c-pelvis:      #ff6348;
+  --c-leg:         #10ac84;
+  --c-foot:        #f368e0;
+  --c-sesamoid:    #c8d6e5;
+
+  /* Ölçü */
+  --radius-xs:     6px;
+  --radius-sm:     10px;
+  --radius:        12px;
+  --radius-lg:     18px;
+  --radius-xl:     24px;
+  --radius-pill:   999px;
+
+  /* Gölge */
+  --shadow-sm:     0 2px 8px rgba(0,0,0,.20);
+  --shadow:        0 10px 30px rgba(0,0,0,.35);
+  --shadow-lg:     0 20px 50px rgba(0,0,0,.45);
+  --shadow-glow:   0 0 0 3px rgba(56,189,248,.15);
+
+  /* Tipografi */
+  --font:          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono:     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Boyutlar */
+  --sidebar-w:     440px;
+  --toolbar-pad:   14px;
+  --panel-pad:     16px;
+  --header-h:      60px;
+
+  /* Geçiş süreleri */
+  --t-fast:        140ms ease;
+  --t-med:         240ms ease;
+  --t-slow:        420ms ease;
+  --t-ease:        cubic-bezier(.4, 0, .2, 1);
+
+  /* Cihaz özellikleri (JS tarafından doldurulur) */
+  --safe-top:      env(safe-area-inset-top, 0px);
+  --safe-bottom:   env(safe-area-inset-bottom, 0px);
+  --safe-left:     env(safe-area-inset-left, 0px);
+  --safe-right:    env(safe-area-inset-right, 0px);
+}
+
+/* ============================================================================
+   BÖLÜM 2 · TEMA DEĞİŞKENLERİ — AYDINLIK
+   ============================================================================ */
+:root[data-theme="light"]{
+  --bg:            #f4f6fa;
+  --bg-soft:       #eaeef5;
+  --bg-elev:       #ffffff;
+  --panel:         #ffffff;
+  --panel-2:       #f7f9fc;
+  --panel-3:       #eef2f8;
+  --panel-hover:   #e2e8f2;
+
+  --line:          #d6dde8;
+  --line-soft:     #e6ebf2;
+  --line-strong:   #b8c4d6;
+
+  --txt:           #0f1b2d;
+  --txt-soft:      #253449;
+  --txt-muted:     #5c6b82;
+  --txt-faint:     #8593a8;
+
+  --accent:        #e11d48;
+  --accent-2:      #0284c7;
+  --accent-3:      #d97706;
+  --ok:            #16a34a;
+  --danger:        #dc2626;
+
+  --shadow-sm:     0 2px 8px rgba(15,27,45,.06);
+  --shadow:        0 10px 30px rgba(15,27,45,.12);
+  --shadow-lg:     0 20px 50px rgba(15,27,45,.16);
+  --shadow-glow:   0 0 0 3px rgba(2,132,199,.15);
+}
+
+/* ============================================================================
+   BÖLÜM 3 · CİHAZ SINIFLARI
+   JS tarafından <html> etiketine eklenir: .is-mobile, .is-tablet, .is-desktop
+   Ayrıca: .is-portrait / .is-landscape / .is-touch
+   ============================================================================ */
+
+/* ============================================================================
+   BÖLÜM 4 · RESET & TEMEL
+   ============================================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--txt);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* Dokunmatik cihazlarda metin seçimini kapat (panel hariç) */
+.is-touch body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.is-touch #panelBody,
+.is-touch .modalBody {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--accent-2);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* İnce scrollbar — masaüstü */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 10px;
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--txt-faint);
+}
+
+/* ============================================================================
+   BÖLÜM 5 · UYGULAMA YERLEŞİMİ
+   ============================================================================ */
+#app {
+  display: grid;
+  grid-template-columns: 1fr var(--sidebar-w);
+  grid-template-rows: 1fr;
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 3D görüntüleyici alanı */
+#viewport {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 40%, var(--bg-soft) 0%, var(--bg) 70%);
+  isolation: isolate;
+}
+
+#viewport canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+}
+
+/* Kenar paneli */
+#sidebar {
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 5;
+  min-width: 0;
+}
+
+/* ============================================================================
+   BÖLÜM 6 · YÜKLENİYOR EKRANI
+   ============================================================================ */
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 20, .96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 100;
+  gap: 18px;
+  padding: 30px 24px;
+  transition: opacity var(--t-slow), visibility var(--t-slow);
+  text-align: center;
+}
+
+:root[data-theme="light"] #loading {
+  background: rgba(244, 246, 250, .96);
+}
+
+#loading.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.spinner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent-2);
+  border-right-color: var(--accent-2);
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#loadText {
+  color: var(--txt);
+  font-size: 15px;
+  font-weight: 500;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+#loadSub {
+  color: var(--txt-muted);
+  font-size: 12.5px;
+  max-width: 420px;
+  line-height: 1.5;
+  min-height: 18px;
+}
+
+#progressBar {
+  width: 100%;
+  max-width: 280px;
+  height: 6px;
+  background: var(--panel-3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+#progressFill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-2), var(--info));
+  border-radius: 3px;
+  transition: width .25s ease;
+}
+
+#loadActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+#loadActions .retry-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--t-fast);
+}
+
+#loadActions .retry-btn:hover {
+  background: var(--panel-hover);
+  border-color: var(--txt-faint);
+}
+
+/* ============================================================================
+   BÖLÜM 7 · ARAÇ ÇUBUĞU (ÜST)
+   ============================================================================ */
+#toolbar {
+  position: absolute;
+  top: calc(var(--toolbar-pad) + var(--safe-top));
+  left: calc(var(--toolbar-pad) + var(--safe-left));
+  right: calc(var(--toolbar-pad) + var(--safe-right));
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  z-index: 20;
+  pointer-events: none;
+  flex-wrap: wrap;
+}
+
+#toolbar > * {
+  pointer-events: auto;
+}
+
+/* Arama kutusu sarmalayıcı */
+#searchWrap {
+  flex: 1;
+  min-width: 180px;
+  max-width: 460px;
+  position: relative;
+}
+
+#search {
+  width: 100%;
+  padding: 11px 36px 11px 40px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: rgba(17, 24, 35, .94);
+  color: var(--txt);
+  font-size: 14px;
+  outline: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+:root[data-theme="light"] #search {
+  background: rgba(255, 255, 255, .95);
+}
+
+#search:focus {
+  border-color: var(--accent-2);
+  box-shadow: var(--shadow-glow);
+}
+
+#search::placeholder {
+  color: var(--txt-faint);
+}
+
+#searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--txt-muted);
+  pointer-events: none;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Arama temizle butonu */
+#searchClear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--panel-3);
+  color: var(--txt-muted);
+  font-size: 12px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t-fast);
+}
+
+#searchClear.show {
+  display: flex;
+}
+
+#searchClear:hover {
+  background: var(--panel-hover);
+  color: var(--txt);
+}
+
+/* Öneri listesi */
+#suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  display: none;
+  z-index: 30;
+  box-shadow: var(--shadow-lg);
+  -webkit-overflow-scrolling: touch;
+}
+
+#suggest.open {
+  display: block;
+}
+
+#suggest .item {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background var(--t-fast);
+}
+
+#suggest .item:last-child {
+  border-bottom: none;
+}
+
+#suggest .item:hover,
+#suggest .item.active {
+  background: var(--panel-3);
+}
+
+#suggest .item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+#suggest .item .info {
+  flex: 1;
+  min-width: 0;
+}
+
+#suggest .item .tr {
+  color: var(--txt);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#suggest .item .lat {
+  color: var(--txt-muted);
+  font-size: 11px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#suggest .item .tag {
+  margin-left: auto;
+  font-size: 9.5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--panel-3);
+  color: var(--txt-muted);
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+#suggest .empty {
+  padding: 20px 16px;
+  color: var(--txt-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Araç butonları */
+.tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 13px;
+  min-width: 42px;
+  height: 42px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: rgba(17, 24, 35, .94);
+  color: var(--txt);
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast), color var(--t-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+:root[data-theme="light"] .tool-btn {
+  background: rgba(255, 255, 255, .95);
+}
+
+.tool-btn:hover {
+  background: var(--panel-3);
+  border-color: var(--txt-faint);
+}
+
+.tool-btn:active {
+  transform: scale(.95);
+}
+
+.tool-btn.on {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #0a0e14;
+}
+
+.tool-btn .ico {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tool-btn .label {
+  font-size: 12px;
+}
+
+/* ============================================================================
+   BÖLÜM 8 · BİLGİ ROZETLERİ
+   ============================================================================ */
+#badges {
+  position: absolute;
+  top: calc(var(--toolbar-pad) + 58px + var(--safe-top));
+  left: calc(var(--toolbar-pad) + var(--safe-left));
+  display: flex;
+  gap: 8px;
+  z-index: 15;
+  flex-wrap: wrap;
+  max-width: calc(100% - var(--toolbar-pad) * 2 - var(--safe-left) - var(--safe-right));
+  pointer-events: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(17, 24, 35, .9);
+  border: 1px solid var(--line);
+  color: var(--txt-muted);
+  font-size: 11.5px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  white-space: nowrap;
+}
+
+:root[data-theme="light"] .badge {
+  background: rgba(255, 255, 255, .9);
+}
+
+.badge b {
+  color: var(--txt);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   BÖLÜM 9 · HOVER İPUCU (Tooltip)
+   ============================================================================ */
+#tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--txt);
+  z-index: 50;
+  display: none;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tooltip.show {
+  display: block;
+}
+
+#tooltip .lat {
+  color: var(--txt-muted);
+  font-size: 10px;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* Dokunmatik cihazda tooltip gizle (hover yok) */
+.is-touch #tooltip {
+  display: none !important;
+}
+
+/* ============================================================================
+   BÖLÜM 10 · KENAR PANELİ BAŞLIĞI
+   ============================================================================ */
+#panelHeader {
+  padding: 18px 20px 14px;
+  padding-top: calc(18px + var(--safe-top));
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  background: var(--panel);
+}
+
+#panelHeader h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#panelHeader h1 .emoji {
+  font-size: 18px;
+}
+
+#panelHeader .sub {
+  font-size: 12px;
+  color: var(--txt-muted);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   BÖLÜM 11 · SEKMELER
+   ============================================================================ */
+#tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  background: var(--panel-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  padding: 12px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--txt-muted);
+  border-bottom: 2px solid transparent;
+  transition: color var(--t-fast), border-color var(--t-fast);
+  white-space: nowrap;
+  position: relative;
+}
+
+.tab:hover {
+  color: var(--txt);
+}
+
+.tab.active {
+  color: var(--accent-2);
+  border-bottom-color: var(--accent-2);
+}
+
+/* ============================================================================
+   BÖLÜM 12 · PANEL GÖVDE (Scrollable)
+   ============================================================================ */
+#panelBody {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--panel-pad);
+  padding-bottom: calc(var(--panel-pad) + var(--safe-bottom));
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+.pane {
+  display: none;
+}
+
+.pane.active {
+  display: block;
+  animation: fadeIn var(--t-med);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ============================================================================
+   BÖLÜM 13 · BOŞ DURUM KARTI
+   ============================================================================ */
+#infoCard {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--t-fast);
+}
+
+#infoCard.empty .emptyState {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.emptyState .big {
+  font-size: 46px;
+  margin-bottom: 12px;
+  opacity: .55;
+  filter: grayscale(.3);
+}
+
+.emptyState h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--txt);
+  font-weight: 600;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--txt-muted);
+  line-height: 1.65;
+}
+
+/* ============================================================================
+   BÖLÜM 14 · BÖLGE HERO KARTI
+   ============================================================================ */
+.regionHero {
+  padding: 20px 18px 18px;
+  background: linear-gradient(135deg, var(--region-color, var(--accent)) 0%, var(--panel-2) 85%);
+  border-bottom: 1px solid var(--line-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.regionHero::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--region-color, var(--accent));
+}
+
+.regionHero .icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+  display: block;
+  line-height: 1;
+}
+
+.regionHero h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  line-height: 1.2;
+}
+
+.regionHero .lat {
+  font-size: 13px;
+  color: rgba(255, 255, 255, .8);
+  font-style: italic;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+:root[data-theme="light"] .regionHero .lat {
+  color: rgba(255, 255, 255, .85);
+}
+
+.regionHero .cnt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, .3);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Bölge açıklaması */
+.regionDesc {
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--txt-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--panel-2);
+}
+
+/* ============================================================================
+   BÖLÜM 15 · ALT BÖLGE SEKMELERİ
+   ============================================================================ */
+.subTabs {
+  display: flex;
+  overflow-x: auto;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 0 8px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.subTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.subTab {
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--txt-muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+
+.subTab:hover {
+  color: var(--txt);
+  background: var(--panel-2);
+}
+
+.subTab.active {
+  color: var(--txt);
+  border-bottom-color: var(--sub-color, var(--accent));
+}
+
+.subTab .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sub-color, var(--accent));
+  flex-shrink: 0;
+}
+
+.subTab .n {
+  font-size: 10.5px;
+  color: var(--txt-faint);
+  background: var(--panel-3);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+
+.subTab.active .n {
+  background: var(--panel-hover);
+  color: var(--txt);
+}
+
+/* ============================================================================
+   BÖLÜM 16 · KEMİK LİSTESİ (Kart içi)
+   ============================================================================ */
+.boneList {
+  padding: 12px 14px 16px;
+}
+
+.boneRow {
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.boneRow:last-child {
+  margin-bottom: 0;
+}
+
+.boneRow:hover {
+  background: var(--panel);
+  border-color: var(--accent-2);
+  transform: translateX(3px);
+}
+
+.boneRow:active {
+  transform: translateX(1px);
+}
+
+.boneRow .ico {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.boneRow .info {
+  flex: 1;
+  min-width: 0;
+}
+
+.boneRow .tr {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--txt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boneRow .lat {
+  font-size: 11px;
+  color: var(--txt-muted);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boneRow .cnt {
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--txt-muted);
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.boneRow .arrow {
+  font-size: 11px;
+  color: var(--txt-faint);
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
+/* ============================================================================
+   BÖLÜM 17 · KEMİK DETAY KARTI
+   ============================================================================ */
+.detailHero {
+  padding: 14px 18px 16px;
+  background: linear-gradient(180deg, var(--panel-3) 0%, var(--panel-2) 100%);
+  border-bottom: 1px solid var(--line-soft);
+  position: relative;
+}
+
+.detailHero::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--region-color, var(--accent));
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent-2);
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.backBtn:hover {
+  background: var(--panel-3);
+  border-color: var(--txt-faint);
+}
+
+.backBtn:active {
+  transform: scale(.97);
+}
+
+.detailHero .region {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  color: var(--region-color, var(--accent));
+  border: 1px solid currentColor;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.detailHero h2 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  line-height: 1.25;
+}
+
+.detailHero .lat {
+  font-size: 12.5px;
+  color: var(--accent-2);
+  font-style: italic;
+}
+
+.detailHero .meta {
+  font-size: 11.5px;
+  color: var(--txt-muted);
+  margin-top: 8px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.detailHero .meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Kemik görsel alanı */
+.boneImage {
+  margin: 14px 16px 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  display: none;
+  position: relative;
+}
+
+.boneImage.show {
+  display: block;
+  animation: fadeIn var(--t-med);
+}
+
+.boneImage img {
+  width: 100%;
+  display: block;
+  background: #ffffff;
+}
+
+.boneImage .cap {
+  padding: 9px 12px;
+  font-size: 11px;
+  color: var(--txt-muted);
+  text-align: center;
+  background: var(--panel-2);
+  border-top: 1px solid var(--line);
+  font-style: italic;
+}
+
+/* Görsel yoksa placeholder */
+.imgPlaceholder {
+  margin: 14px 16px 0;
+  padding: 26px 18px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 12px;
+  color: var(--txt-muted);
+  background: var(--panel-3);
+  display: none;
+}
+
+.imgPlaceholder.show {
+  display: block;
+  animation: fadeIn var(--t-med);
+}
+
+.imgPlaceholder .ph-icon {
+  font-size: 30px;
+  margin-bottom: 8px;
+  opacity: .4;
+}
+
+.imgPlaceholder code {
+  font-family: var(--font-mono);
+  background: var(--panel);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  color: var(--accent-2);
+  font-size: 11px;
+}
+
+/* Detay gövde */
+.detailBody {
+  padding: 16px 18px 8px;
+}
+
+.section {
+  margin-bottom: 16px;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.sectionTitle {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--txt-muted);
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.sectionTitle .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.sectionTitle .dot.blue   { background: var(--accent-2); }
+.sectionTitle .dot.yellow { background: var(--accent-3); }
+.sectionTitle .dot.green  { background: var(--ok); }
+
+.sectionText {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--txt-soft);
+}
+
+/* Klinik ipucu bloğu */
+.clinical {
+  background: rgba(251, 191, 36, .07);
+  border: 1px solid rgba(251, 191, 36, .25);
+  border-left: 3px solid var(--accent-3);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--txt-soft);
+}
+
+:root[data-theme="light"] .clinical {
+  background: rgba(217, 119, 6, .06);
+  border-color: rgba(217, 119, 6, .22);
+}
+
+/* ============================================================================
+   BÖLÜM 18 · KART AKSİYONLARI
+   ============================================================================ */
+.cardActions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + var(--safe-bottom));
+  border-top: 1px solid var(--line-soft);
+  background: var(--panel-2);
+  flex-wrap: wrap;
+}
+
+.cardActions button {
+  flex: 1;
+  min-width: 100px;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--txt);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+}
+
+.cardActions button:hover {
+  background: var(--panel-hover);
+  border-color: var(--txt-faint);
+}
+
+.cardActions button:active {
+  transform: scale(.97);
+}
+
+.cardActions button.primary {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #0a0e14;
+  font-weight: 600;
+}
+
+.cardActions button.primary:hover {
+  filter: brightness(1.1);
+}
+
+/* ============================================================================
+   BÖLÜM 19 · LİSTE SEKMESİ
+   ============================================================================ */
+.listFilter {
+  margin-bottom: 10px;
+}
+
+.listFilter input {
+  width: 100%;
+  padding: 10px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--txt);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.listFilter input:focus {
+  border-color: var(--accent-2);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Bölge grubu */
+.regionGroup {
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel-2);
+}
+
+.regionGroup > summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  user-select: none;
+  transition: background var(--t-fast);
+}
+
+.regionGroup > summary::-webkit-details-marker {
+  display: none;
+}
+
+.regionGroup > summary:hover {
+  background: var(--panel-3);
+}
+
+.regionGroup[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.regionGroup > summary .arrow {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--txt-muted);
+  transition: transform var(--t-fast);
+  flex-shrink: 0;
+}
+
+.regionGroup[open] > summary .arrow {
+  transform: rotate(90deg);
+}
+
+.regionGroup > summary .rDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.regionGroup > summary .rCount {
+  margin-left: 6px;
+  font-size: 10.5px;
+  color: var(--txt-muted);
+  background: var(--panel-3);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+}
+
+.regionGroup .items {
+  padding: 6px;
+}
+
+.boneItem {
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background var(--t-fast);
+  border: 1px solid transparent;
+}
+
+.boneItem:hover {
+  background: var(--panel-3);
+  border-color: var(--line-soft);
+}
+
+.boneItem .bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.boneItem .tr {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boneItem .lat {
+  color: var(--txt-muted);
+  font-size: 10.5px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+  flex-shrink: 1;
+}
+
+.boneItem .cnt {
+  font-size: 10px;
+  color: var(--txt-faint);
+  background: var(--panel-3);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   BÖLÜM 20 · İSTATİSTİK SEKMESİ
+   ============================================================================ */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.statCard {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  transition: border-color var(--t-fast);
+}
+
+.statCard:hover {
+  border-color: var(--line-strong);
+}
+
+.statCard .label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--txt-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.statCard .value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -.5px;
+  color: var(--txt);
+  line-height: 1.1;
+}
+
+.statCard .unit {
+  font-size: 12px;
+  color: var(--txt-muted);
+  font-weight: 400;
+  margin-left: 3px;
+}
+
+.regionBar {
+  display: flex;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.regionBar .seg {
+  height: 100%;
+  transition: flex var(--t-med);
+}
+
+.legend {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.legend .li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--txt-muted);
+  padding: 9px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.legend .li .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend .li .name {
+  flex: 1;
+}
+
+.legend .li b {
+  color: var(--txt);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   BÖLÜM 21 · MODAL (Yardım / Hakkında)
+   ============================================================================ */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-top: calc(20px + var(--safe-top));
+  padding-bottom: calc(20px + var(--safe-bottom));
+  animation: fadeIn var(--t-med);
+}
+
+.modal.open {
+  display: flex;
+}
+
+.modalCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  max-width: 640px;
+  width: 100%;
+  max-height: 85vh;
+  max-height: 85dvh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp var(--t-med) var(--t-ease);
+  -webkit-overflow-scrolling: touch;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+.modalHead {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+
+.modalHead h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.modalHead button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--panel-3);
+  color: var(--txt-muted);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t-fast);
+  flex-shrink: 0;
+}
+
+.modalHead button:hover {
+  background: var(--panel-hover);
+  color: var(--txt);
+}
+
+.modalBody {
+  padding: 20px 22px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--txt-soft);
+}
+
+.modalBody h3 {
+  font-size: 14px;
+  margin: 20px 0 8px;
+  color: var(--txt);
+  font-weight: 600;
+}
+
+.modalBody h3:first-child {
+  margin-top: 0;
+}
+
+.modalBody p {
+  margin: 0 0 12px;
+}
+
+.modalBody ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.modalBody li {
+  margin-bottom: 6px;
+}
+
+.modalBody code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--panel-3);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  color: var(--accent-2);
+}
+
+.modalBody kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  color: var(--txt);
+}
+
+.modalBody .note {
+  background: rgba(56, 189, 248, .08);
+  border-left: 3px solid var(--accent-2);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.modalBody .warn {
+  background: rgba(251, 191, 36, .08);
+  border-left: 3px solid var(--accent-3);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+/* ============================================================================
+   BÖLÜM 22 · TOAST BİLDİRİM
+   ============================================================================ */
+#toast {
+  position: fixed;
+  bottom: calc(24px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  padding: 13px 20px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  color: var(--txt);
+  z-index: 300;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transition: all var(--t-med) var(--t-ease);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(90vw, 420px);
+  font-weight: 500;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#toast .ico {
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   BÖLÜM 23 · DEMO ROZETİ
+   ============================================================================ */
+#demoBadge {
+  position: absolute;
+  bottom: calc(14px + var(--safe-bottom));
+  right: calc(14px + var(--safe-right));
+  background: var(--accent-3);
+  color: #0a0e14;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  z-index: 15;
+  display: none;
+  box-shadow: var(--shadow-sm);
+  letter-spacing: .3px;
+}
+
+#demoBadge.show {
+  display: block;
+}
+
+/* ============================================================================
+   BÖLÜM 24 · HATA ROZETİ (GLB yüklenemedi)
+   ============================================================================ */
+#errorBanner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(17, 24, 35, .96);
+  border: 1px solid var(--accent-3);
+  border-radius: var(--radius-lg);
+  padding: 24px 26px;
+  max-width: 440px;
+  width: calc(100% - 40px);
+  text-align: center;
+  z-index: 30;
+  box-shadow: var(--shadow-lg);
+  display: none;
+  backdrop-filter: blur(8px);
+}
+
+:root[data-theme="light"] #errorBanner {
+  background: rgba(255, 255, 255, .98);
+}
+
+#errorBanner.show {
+  display: block;
+  animation: fadeIn var(--t-med);
+}
+
+#errorBanner h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--accent-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+#errorBanner p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--txt-muted);
+  line-height: 1.6;
+}
+
+#errorBanner code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--panel-3);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--accent-2);
+  margin: 12px 0;
+  text-align: left;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+#errorBanner .close {
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   BÖLÜM 25 · BÖLGE RENKLERİ (data-region)
+   ============================================================================ */
+[data-region="cranium"]  { --region-color: var(--c-cranium); }
+[data-region="face"]     { --region-color: var(--c-face); }
+[data-region="ear"]      { --region-color: var(--c-ear); }
+[data-region="hyoid"]    { --region-color: var(--c-hyoid); }
+[data-region="spine"]    { --region-color: var(--c-spine); }
+[data-region="thorax"]   { --region-color: var(--c-thorax); }
+[data-region="shoulder"] { --region-color: var(--c-shoulder); }
+[data-region="arm"]      { --region-color: var(--c-arm); }
+[data-region="hand"]     { --region-color: var(--c-hand); }
+[data-region="pelvis"]   { --region-color: var(--c-pelvis); }
+[data-region="leg"]      { --region-color: var(--c-leg); }
+[data-region="foot"]     { --region-color: var(--c-foot); }
+[data-region="sesamoid"] { --region-color: var(--c-sesamoid); }
+[data-region="head"]     { --region-color: var(--c-cranium); }
+[data-region="upperLimb"]{ --region-color: var(--c-arm); }
+[data-region="lowerLimb"]{ --region-color: var(--c-leg); }
+
+/* ============================================================================
+   BÖLÜM 26 · YARDIMCI SINIFLAR
+   ============================================================================ */
+.hidden { display: none !important; }
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.text-muted { color: var(--txt-muted); }
+.text-center { text-align: center; }
+.text-small { font-size: 12px; }
+.bold { font-weight: 600; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+
+/* ============================================================================
+   BÖLÜM 27 · RESPONSIVE — TABLET (Portre)
+   ============================================================================ */
+@media (max-width: 1100px) {
+  :root {
+    --sidebar-w: 380px;
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 28 · RESPONSIVE — TABLET (Yatay) / KÜÇÜK LAPTOP
+   ============================================================================ */
+@media (max-width: 960px) and (orientation: landscape) {
+  :root {
+    --sidebar-w: 360px;
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 29 · RESPONSIVE — TABLET (Portre) / MOBİL (Yatay)
+   ============================================================================ */
+@media (max-width: 900px) and (orientation: portrait),
+       (max-width: 900px) and (orientation: landscape) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  #sidebar {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 52vh;
+    max-height: 52dvh;
+    min-height: 0;
+  }
+
+  #panelHeader {
+    padding: 14px 16px 10px;
+    padding-top: calc(14px + var(--safe-top));
+  }
+
+  #panelHeader h1 {
+    font-size: 15px;
+  }
+
+  #panelHeader .sub {
+    font-size: 11.5px;
+  }
+
+  #panelBody {
+    padding: 12px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+  }
+
+  #toolbar {
+    gap: 6px;
+  }
+
+  #toolbar .tool-btn .label {
+    display: none;
+  }
+
+  #toolbar .tool-btn {
+    padding: 10px;
+    min-width: 42px;
+  }
+
+  #badges {
+    top: calc(var(--toolbar-pad) + 56px + var(--safe-top));
+    font-size: 11px;
+  }
+
+  .badge {
+    padding: 5px 10px;
+    font-size: 10.5px;
+  }
+
+  #search {
+    font-size: 13px;
+    padding: 10px 32px 10px 36px;
+  }
+
+  #searchIcon {
+    left: 12px;
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 30 · RESPONSIVE — MOBİL (Portre)
+   ============================================================================ */
+@media (max-width: 600px) and (orientation: portrait) {
+  :root {
+    --toolbar-pad: 10px;
+    --panel-pad: 12px;
+  }
+
+  #sidebar {
+    max-height: 55vh;
+    max-height: 55dvh;
+  }
+
+  #panelHeader {
+    padding: 12px 14px 8px;
+    padding-top: calc(12px + var(--safe-top));
+  }
+
+  #panelHeader h1 {
+    font-size: 14.5px;
+  }
+
+  #panelHeader .sub {
+    font-size: 11px;
+  }
+
+  #tabs {
+    padding: 0 6px;
+  }
+
+  .tab {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  #panelBody {
+    padding: 10px;
+    padding-bottom: calc(10px + var(--safe-bottom));
+  }
+
+  .regionHero {
+    padding: 16px 14px 14px;
+  }
+
+  .regionHero .icon {
+    font-size: 30px;
+    margin-bottom: 6px;
+  }
+
+  .regionHero h2 {
+    font-size: 18px;
+  }
+
+  .regionHero .lat {
+    font-size: 12px;
+  }
+
+  .regionHero .cnt {
+    font-size: 11px;
+    padding: 5px 11px;
+  }
+
+  .regionDesc {
+    padding: 12px 14px;
+    font-size: 12.5px;
+  }
+
+  .subTab {
+    padding: 10px 12px;
+    font-size: 11.5px;
+  }
+
+  .boneRow {
+    padding: 11px 12px;
+    gap: 10px;
+  }
+
+  .boneRow .tr {
+    font-size: 13px;
+  }
+
+  .boneRow .lat {
+    font-size: 10.5px;
+  }
+
+  .boneRow .ico {
+    font-size: 18px;
+    width: 24px;
+  }
+
+  .detailHero {
+    padding: 12px 14px 14px;
+  }
+
+  .detailHero h2 {
+    font-size: 17px;
+  }
+
+  .detailHero .lat {
+    font-size: 12px;
+  }
+
+  .boneImage {
+    margin: 12px 12px 0;
+  }
+
+  .imgPlaceholder {
+    margin: 12px 12px 0;
+    padding: 20px 14px;
+  }
+
+  .detailBody {
+    padding: 14px 14px 8px;
+  }
+
+  .sectionText {
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+
+  .clinical {
+    padding: 11px 12px;
+    font-size: 12px;
+  }
+
+  .cardActions {
+    padding: 10px 12px;
+    padding-bottom: calc(10px + var(--safe-bottom));
+    gap: 6px;
+  }
+
+  .cardActions button {
+    padding: 10px 10px;
+    font-size: 12px;
+    min-width: 90px;
+  }
+
+  .statGrid {
+    gap: 8px;
+  }
+
+  .statCard {
+    padding: 12px;
+  }
+
+  .statCard .value {
+    font-size: 20px;
+  }
+
+  .statCard .label {
+    font-size: 10px;
+  }
+
+  #search::placeholder {
+    font-size: 12px;
+  }
+
+  .modalHead {
+    padding: 15px 18px;
+  }
+
+  .modalHead h2 {
+    font-size: 15px;
+  }
+
+  .modalBody {
+    padding: 16px 18px;
+    font-size: 13px;
+  }
+
+  #toast {
+    font-size: 12.5px;
+    padding: 11px 16px;
+    bottom: calc(16px + var(--safe-bottom));
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 31 · RESPONSIVE — MOBİL (Yatay — az yer)
+   ============================================================================ */
+@media (max-height: 500px) and (orientation: landscape) {
+  #sidebar {
+    max-height: 60vh;
+  }
+
+  #panelHeader {
+    padding: 10px 14px 8px;
+    padding-top: calc(10px + var(--safe-top));
+  }
+
+  #panelHeader h1 {
+    font-size: 14px;
+  }
+
+  #panelHeader .sub {
+    display: none;
+  }
+
+  #badges {
+    display: none;
+  }
+
+  .tab {
+    padding: 9px 12px;
+    font-size: 11.5px;
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 32 · ERİŞİLEBİLİRLİK — Hareket azaltma
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 33 · YAZDIRMA STİLİ
+   ============================================================================ */
+@media print {
+  #toolbar,
+  #badges,
+  #tabs,
+  #loading,
+  #toast,
+  #demoBadge,
+  #viewport,
+  #searchWrap {
+    display: none !important;
+  }
+
+  #app {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  #sidebar {
+    border: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  #panelBody {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .regionGroup {
+    break-inside: avoid;
+  }
+
+  .boneRow {
+    break-inside: avoid;
+  }
+}
+
+/* ============================================================================
+   BÖLÜM 34 · ANİMASYONLAR
+   ============================================================================ */
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(56, 189, 248, .4); }
+  70%  { box-shadow: 0 0 0 12px rgba(56, 189, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+}
+
+.pulse {
+  animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, var(--panel-2) 0%, var(--panel-3) 50%, var(--panel-2) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+/* ============================================================================
+   BÖLÜM 35 · SCROLLBAR (Panel)
+   ============================================================================ */
+#panelBody::-webkit-scrollbar {
+  width: 8px;
+}
+
+#panelBody::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 8px;
+  border: 2px solid var(--panel);
+}
+
+#panelBody::-webkit-scrollbar-thumb:hover {
+  background: var(--txt-faint);
+}
+
+/* Modal scrollbar */
+.modalCard::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modalCard::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 8px;
+  border: 2px solid var(--panel);
+}
+
+/* ============================================================================
+   BÖLÜM 36 · YATAY KAYDIRMA ÇUBUĞU (Dokunmatik)
+   ============================================================================ */
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================================
+   BÖLÜM 37 · KÜÇÜK NOKTA (Cihaz tipi göstergesi — opsiyonel debug)
+   ============================================================================ */
+#deviceDot {
+  position: fixed;
+  bottom: 6px;
+  left: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  z-index: 9999;
+  opacity: .25;
+  pointer-events: none;
+  display: none;
+}
+
+#deviceDot.mobile  { background: var(--accent); }
+#deviceDot.tablet  { background: var(--accent-3); }
+#deviceDot.desktop { background: var(--ok); }
+
+/* ============================================================================
+   BÖLÜM 38 · YÖNLENDİRME UYARISI (İsteğe bağlı kullanılmıyor)
+   ============================================================================ */
+#rotateHint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+#rotateHint.show {
+  display: flex;
+}
+
+#rotateHint .icon {
+  font-size: 48px;
+  transform: rotate(90deg);
+}
+
+#rotateHint p {
+  margin: 0;
+  color: var(--txt-muted);
+  font-size: 14px;
+  max-width: 280px;
+  line-height: 1.6;
+}
+/* ============================================================================
+   BÖLÜM 39 · KALİBRASYON PANELİ (v2.0 üzerine eklenti)
+   ============================================================================ */
+#calibFab{
+  position:absolute;
+  top:calc(var(--toolbar-pad) + 58px + 40px + var(--safe-top));
+  right:calc(var(--toolbar-pad) + var(--safe-right));
+  width:44px;height:44px;
+  background:var(--accent-2);color:#0a0e14;
+  border:none;border-radius:var(--radius);
+  font-size:19px;cursor:pointer;z-index:25;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(56,189,248,.45);
+  transition:transform var(--t-fast),background var(--t-fast);
+}
+#calibFab:hover{transform:scale(1.08)}
+#calibFab.on{background:var(--ok)}
+
+#calibPanel{
+  position:absolute;
+  top:calc(var(--toolbar-pad) + 58px + 40px + var(--safe-top));
+  right:calc(var(--toolbar-pad) + 56px + var(--safe-right));
+  width:330px;
+  max-height:calc(100vh - 160px);
+  background:var(--panel);
+  border:1px solid var(--accent-2);
+  border-radius:var(--radius);
+  z-index:26;
+  font-size:12px;
+  color:var(--txt);
+  box-shadow:var(--shadow-lg);
+  display:none;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#calibPanel.open{display:block}
+#calibPanel .cp-head{
+  padding:12px 14px;background:var(--panel-2);
+  border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:2;
+}
+#calibPanel .cp-head h3{margin:0;font-size:13px;color:var(--accent-2);font-weight:600}
+#calibPanel .cp-head button{
+  background:transparent;color:var(--txt-muted);border:none;
+  font-size:16px;cursor:pointer;padding:0 6px;
+}
+#calibPanel .cp-body{padding:12px 14px}
+#calibPanel .cp-region-tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+#calibPanel .cp-region-tabs button{
+  padding:6px 10px;font-size:11px;background:var(--panel-3);
+  border:1px solid var(--line);border-radius:var(--radius-xs);
+  color:var(--txt-muted);cursor:pointer;font-family:inherit;
+}
+#calibPanel .cp-region-tabs button.active{
+  background:var(--accent-2);color:#0a0e14;
+  border-color:var(--accent-2);font-weight:600;
+}
+#calibPanel .cp-row{
+  display:grid;grid-template-columns:24px 1fr 58px;
+  gap:8px;align-items:center;margin-bottom:8px;
+}
+#calibPanel .cp-row label{color:var(--txt-muted);font-size:10.5px;font-weight:600}
+#calibPanel input[type=range]{
+  width:100%;height:4px;-webkit-appearance:none;appearance:none;
+  background:var(--line);border-radius:2px;outline:none;
+}
+#calibPanel input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;
+  background:var(--accent-2);border-radius:50%;cursor:pointer;border:none;
+}
+#calibPanel input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;background:var(--accent-2);
+  border-radius:50%;cursor:pointer;border:none;
+}
+#calibPanel input[type=number]{
+  width:100%;padding:4px;background:var(--panel-3);
+  border:1px solid var(--line);border-radius:var(--radius-xs);
+  color:var(--txt);font-size:10.5px;text-align:center;
+  font-family:var(--font-mono);
+}
+#calibPanel .cp-section{
+  margin-bottom:14px;padding-bottom:14px;
+  border-bottom:1px solid var(--line-soft);
+}
+#calibPanel .cp-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+#calibPanel .cp-section-title{
+  font-size:10px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--txt-faint);margin-bottom:8px;font-weight:600;
+}
+#calibPanel .cp-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+#calibPanel .cp-actions button{
+  flex:1;min-width:90px;padding:9px 10px;font-size:11px;
+  border-radius:var(--radius-xs);border:1px solid var(--line);
+  background:var(--panel-3);color:var(--txt);cursor:pointer;
+  font-weight:500;font-family:inherit;
+}
+#calibPanel .cp-actions button:hover{background:var(--panel-hover)}
+#calibPanel .cp-actions button.primary{
+  background:var(--accent-2);color:#0a0e14;
+  border-color:var(--accent-2);font-weight:600;
+}
+#calibPanel .cp-actions button.danger{
+  background:var(--danger);color:#fff;border-color:var(--danger);
+}
+#calibPanel .cp-hint{
+  margin-top:10px;font-size:10px;color:var(--txt-faint);line-height:1.5;
+}
+#calibPanel .cp-hint kbd{
+  background:var(--panel-3);padding:1px 5px;border-radius:3px;
+  font-size:9.5px;border:1px solid var(--line);font-family:var(--font-mono);
+}
+@media (max-width:900px){
+  #calibPanel{right:calc(var(--toolbar-pad) + var(--safe-right));left:calc(var(--toolbar-pad) + var(--safe-left));width:auto}
+}
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================================
+     ANA UYGULAMA
+     ============================================================================ -->
+<div id="app">
+
+  <!-- ------------------------------------------------------------------------
+       3D GÖRÜNTÜLEYİCİ ALANI
+       ------------------------------------------------------------------------ -->
+  <section id="viewport" aria-label="3D iskelet görüntüleyici">
+
+    <!-- Yükleniyor ekranı -->
+    <div id="loading" role="status" aria-live="polite">
+      <div class="spinner"></div>
+      <div id="loadText">3D iskelet modelleri yükleniyor…</div>
+      <div id="loadSub">Hazırlanıyor</div>
+      <div id="progressBar"><div id="progressFill"></div></div>
+      <div id="loadActions"></div>
+    </div>
+
+    <!-- Araç çubuğu -->
+    <div id="toolbar" role="toolbar" aria-label="Görüntüleyici araçları">
+      <div id="searchWrap">
+        <span id="searchIcon" aria-hidden="true">🔍</span>
+        <input
+          id="search"
+          type="search"
+          placeholder="Kemik ara… örn: femur, frontal, klavikula"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          enterkeyhint="search"
+          aria-label="Kemik ara"
+        />
+        <button id="searchClear" type="button" aria-label="Aramayı temizle" title="Temizle">✕</button>
+        <div id="suggest" role="listbox" aria-label="Arama önerileri"></div>
+      </div>
+
+      <button class="tool-btn" id="btnReset" type="button" title="Kamerayı sıfırla (R)" aria-label="Kamerayı sıfırla">
+        <span class="ico" aria-hidden="true">⟲</span>
+        <span class="label">Sıfırla</span>
+      </button>
+
+      <button class="tool-btn" id="btnAuto" type="button" title="Otomatik döndür (A)" aria-label="Otomatik döndürme">
+        <span class="ico" aria-hidden="true">↻</span>
+        <span class="label">Oto</span>
+      </button>
+
+      <button class="tool-btn" id="btnWire" type="button" title="Tel kafes modu (W)" aria-label="Tel kafes">
+        <span class="ico" aria-hidden="true">◫</span>
+        <span class="label">Tel</span>
+      </button>
+
+      <button class="tool-btn" id="btnFull" type="button" title="Tam ekran (F)" aria-label="Tam ekran">
+        <span class="ico" aria-hidden="true">⛶</span>
+      </button>
+
+      <button class="tool-btn" id="btnTheme" type="button" title="Tema değiştir (T)" aria-label="Tema">
+        <span class="ico" aria-hidden="true">☾</span>
+      </button>
+
+      <button class="tool-btn" id="btnHelp" type="button" title="Yardım" aria-label="Yardım">
+        <span class="ico" aria-hidden="true">?</span>
+      </button>
+    </div>
+
+    <!-- Rozetler -->
+    <div id="badges" aria-live="polite">
+      <div class="badge">Kemik: <b id="badgeTotal">206</b></div>
+      <div class="badge">Model: <b id="badgeModel">—</b></div>
+      <div class="badge">Seçili: <b id="badgeSel">yok</b></div>
+    </div>
+
+    <!-- Hover ipucu -->
+    <div id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+    <!-- Hata banner'ı -->
+    <div id="errorBanner" role="alert">
+      <h3>⚠️ Modeller Yüklenemedi</h3>
+      <p id="errorBannerText">GLB dosyaları <b>models/</b> klasöründe bulunamadı.</p>
+      <code>iskelet-rehberi/
+├── index.html
+├── models/
+│   ├── kafatasi.glb
+│   ├── omurga.glb
+│   ├── gogus.glb
+│   ├── ust_ekstremite.glb
+│   └── alt_ekstremite.glb
+└── images/</code>
+      <p style="font-size:12px;color:var(--txt-faint)">Dosyaları kontrol et ve sayfayı yenile.</p>
+      <button class="close" type="button" onclick="document.getElementById('errorBanner').classList.remove('show')">Tamam</button>
+    </div>
+
+    <!-- Demo rozeti -->
+    <div id="demoBadge" aria-hidden="true">DEMO MOD</div>
+  </section>
+
+  <!-- ------------------------------------------------------------------------
+       KENAR PANELİ
+       ------------------------------------------------------------------------ -->
+  <aside id="sidebar" aria-label="Bilgi paneli">
+
+    <div id="panelHeader">
+      <h1><span class="emoji" aria-hidden="true">🦴</span> 3D İskelet Rehberi</h1>
+      <div class="sub">Bölgeye tıkla → alt bölge → kemik detayı</div>
+    </div>
+
+    <div id="tabs" role="tablist">
+      <button class="tab active" data-tab="info" type="button" role="tab" aria-selected="true">Bilgi</button>
+      <button class="tab" data-tab="list" type="button" role="tab" aria-selected="false">Liste</button>
+      <button class="tab" data-tab="stats" type="button" role="tab" aria-selected="false">İstatistik</button>
+    </div>
+
+    <div id="panelBody">
+      <!-- BİLGİ SEKMESİ -->
+      <div class="pane active" data-pane="info">
+        <div id="infoCard" class="empty">
+          <div class="emptyState">
+            <div class="big" aria-hidden="true">🦴</div>
+            <h3>Bir bölgeye tıkla</h3>
+            <p>3D iskelet üzerindeki <b>kafatası, omurga, göğüs, kol veya bacak</b> bölgesine tıkla. O bölgedeki tüm kemikleri liste halinde göreceksin.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- LİSTE SEKMESİ -->
+      <div class="pane" data-pane="list">
+        <div class="listFilter">
+          <input
+            type="search"
+            id="listSearch"
+            placeholder="Listede ara…"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-label="Listede ara"
+          />
+        </div>
+        <div id="boneList"></div>
+      </div>
+
+      <!-- İSTATİSTİK SEKMESİ -->
+      <div class="pane" data-pane="stats">
+        <div class="statGrid">
+          <div class="statCard">
+            <div class="label">Toplam Kemik</div>
+            <div class="value">206<span class="unit">adet</span></div>
+          </div>
+          <div class="statCard">
+            <div class="label">Ana Bölge</div>
+            <div class="value">5<span class="unit">grup</span></div>
+          </div>
+          <div class="statCard">
+            <div class="label">En Uzun</div>
+            <div class="value" style="font-size:15px">Femur</div>
+          </div>
+          <div class="statCard">
+            <div class="label">En Küçük</div>
+            <div class="value" style="font-size:15px">Stapes</div>
+          </div>
+        </div>
+        <div class="regionBar" id="regionBar" aria-hidden="true"></div>
+        <div class="legend" id="regionLegend"></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- ============================================================================
+     YARDIM MODALI
+     ============================================================================ -->
+<div class="modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="modalCard">
+    <div class="modalHead">
+      <h2 id="helpTitle">🦴 Yardım</h2>
+      <button id="btnCloseHelp" type="button" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modalBody">
+      <h3>Nasıl kullanılır?</h3>
+      <ul>
+        <li><b>Sol tık / dokunma</b>: bölgeye veya kemiğe seç</li>
+        <li><b>Sürükle</b>: modeli döndür</li>
+        <li><b>İki parmak / tekerlek</b>: yakınlaştır</li>
+        <li><b>İki parmak kaydır</b>: kaydır</li>
+        <li><b>Arama kutusu</b>: isimle hızlı bul</li>
+      </ul>
+
+      <h3>Masaüstü klavye kısayolları</h3>
+      <ul>
+        <li><kbd>R</kbd> — Kamerayı sıfırla</li>
+        <li><kbd>A</kbd> — Otomatik döndür</li>
+        <li><kbd>W</kbd> — Tel kafes modu</li>
+        <li><kbd>F</kbd> — Tam ekran</li>
+        <li><kbd>T</kbd> — Tema değiştir</li>
+        <li><kbd>/</kbd> — Aramaya odaklan</li>
+        <li><kbd>Esc</kbd> — Seçimi temizle / kapat</li>
+      </ul>
+
+      <h3>Klasör yapısı</h3>
+      <div class="note">
+        <p style="margin:0 0 8px">Modeller ve görseller aşağıdaki yapıda olmalı:</p>
+        <code style="display:block;white-space:pre;padding:10px">iskelet-rehberi/
+├── index.html
+├── models/
+│   ├── kafatasi.glb
+│   ├── omurga.glb
+│   ├── gogus.glb
+│   ├── ust_ekstremite.glb
+│   └── alt_ekstremite.glb
+└── images/
+    ├── frontal.png
+    ├── femur.png
+    └── ...</code>
+      </div>
+
+      <h3>Görsel ekleme</h3>
+      <p>Her kemik için PDF'ten kırpılmış görseli <code>images/</code> klasörüne koy. Dosya adı kemiğin anahtarıyla aynı olmalı: <code>femur.png</code>, <code>frontal.png</code> gibi. PNG yoksa JPG denenir; o da yoksa placeholder gösterilir.</p>
+
+      <h3>Çalıştırma</h3>
+      <p>Klasörde terminal aç:</p>
+      <code style="display:block;padding:8px 12px">python -m http.server 8000</code>
+      <p style="margin-top:8px">Sonra tarayıcıda: <code>http://localhost:8000</code></p>
+      <div class="warn">
+        <b>Uyarı:</b> Dosyayı <code>file://</code> ile çift tıklayarak açma. Tarayıcı güvenlik kuralı (CORS) nedeniyle GLB yüklenmez.
+      </div>
+
+      <h3>Cihaz uyumu</h3>
+      <p>Bu rehber mobil, tablet ve masaüstü için otomatik uyarlanır. Ekran yönü değiştiğinde layout kendini yeniden düzenler.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================
+     TOAST
+     ============================================================================ -->
+<div id="toast" role="status" aria-live="polite">
+  <span class="ico" aria-hidden="true">✓</span>
+  <span class="msg"></span>
+</div>
+<!-- ============================================================================
+     KALİBRASYON MODU — FAB & PANEL
+     ============================================================================ -->
+<button id="calibFab" type="button" title="Kalibrasyon Modu (Ctrl+Shift+C)">⚙</button>
+
+<div id="calibPanel">
+  <div class="cp-head">
+    <h3>⚙ Kalibrasyon Modu</h3>
+    <button type="button" id="calibClose">✕</button>
+  </div>
+  <div class="cp-body">
+    <div class="cp-region-tabs" id="calibTabs"></div>
+    <div id="calibControls"></div>
+    <div class="cp-actions">
+      <button class="primary" id="calibSave" type="button">💾 Kaydet</button>
+      <button id="calibExport" type="button">📋 JSON Kopyala</button>
+      <button class="danger" id="calibReset" type="button">↺ Sıfırla</button>
+    </div>
+    <div class="cp-hint">
+      <kbd>←</kbd><kbd>→</kbd> X · <kbd>↑</kbd><kbd>↓</kbd> Y ·
+      <kbd>PgUp</kbd><kbd>PgDn</kbd> Z · <kbd>[</kbd><kbd>]</kbd> ölçek ·
+      <kbd>Shift</kbd> = 10× hız
+    </div>
+  </div>
+</div>
+
+<!-- Cihaz tipi göstergesi (debug için — CSS'te gizli) -->
+<div id="deviceDot" aria-hidden="true"></div>
+
+<!-- ============================================================================
+     THREE.JS IMPORT MAP
+     ============================================================================ -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<!-- ============================================================================
+     ANA UYGULAMA KODU
+     ============================================================================ -->
+<script type="module">
+/* ============================================================================
+   BÖLÜM A · MODÜL İTHALATI
+   ============================================================================ */
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
+
+/* ============================================================================
+   BÖLÜM B · CİHAZ ALGILAMA
+   ============================================================================
+   Tarayıcı özelliklerine ve ekran boyutuna göre cihaz tipini belirler.
+   <html> etiketine sınıf ekler: is-mobile / is-tablet / is-desktop
+   Ayrıca: is-touch, is-portrait, is-landscape
+   ============================================================================ */
+const DEVICE = (function detectDevice() {
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const maxTouch = navigator.maxTouchPoints || 0;
+  const isTouch = ('ontouchstart' in window) || maxTouch > 0;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  // iPad tespiti (iPadOS 13+ masaüstü UA kullanır)
+  const isIPad = /ipad/.test(ua) || (ua.includes('macintosh') && maxTouch > 1);
+
+  const isMobileUA = /android|webos|iphone|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua)
+                     && !isIPad;
+
+  const isTabletUA = isIPad || /tablet|playbook|silk/i.test(ua)
+                     || (isTouch && Math.min(w, h) >= 600 && Math.max(w, h) >= 900);
+
+  let type = 'desktop';
+  if (isMobileUA || (isTouch && Math.min(w, h) < 600)) type = 'mobile';
+  else if (isTabletUA || (isTouch && Math.min(w, h) >= 600 && Math.max(w, h) < 1400)) type = 'tablet';
+
+  const orientation = w > h ? 'landscape' : 'portrait';
+
+  return {
+    type,
+    isMobile:  type === 'mobile',
+    isTablet:  type === 'tablet',
+    isDesktop: type === 'desktop',
+    isTouch,
+    isIPad,
+    orientation,
+    width: w,
+    height: h,
+    dpr: window.devicePixelRatio || 1,
+    // Yardımcılar
+    isSmallScreen: w < 600,
+    isMediumScreen: w >= 600 && w < 1100,
+    isLargeScreen: w >= 1100,
+    isPortrait: orientation === 'portrait',
+    isLandscape: orientation === 'landscape'
+  };
+})();
+
+/* Cihaz sınıflarını <html>'e ekle */
+(function applyDeviceClasses() {
+  const html = document.documentElement;
+  html.classList.add('is-' + DEVICE.type);
+  html.classList.add('is-' + DEVICE.orientation);
+  if (DEVICE.isTouch) html.classList.add('is-touch');
+  if (DEVICE.isMobile) html.classList.add('is-mobile');
+  if (DEVICE.isTablet) html.classList.add('is-tablet');
+  if (DEVICE.isDesktop) html.classList.add('is-desktop');
+
+  // Debug göstergesi (CSS'te gizli)
+  const dot = document.getElementById('deviceDot');
+  if (dot) dot.classList.add(DEVICE.type);
+})();
+
+/* ============================================================================
+   BÖLÜM C · GLB YERLEŞİM AYARLARI
+   ============================================================================
+   5 bölgesel modelin 3D uzaydaki konumu, dönüşü ve ölçeği.
+   Model ilk açıldığında parçalar havada uçuyorsa sadece bu değerleri oynat.
+   pos: [x, y, z] · rot: [x, y, z] radyan · scale: sayı
+   ============================================================================ */
+const GLB_LAYOUT = {
+  head: {
+    id: 'head',
+    file: 'models/kafatasi.glb',
+    pos:   [0,  1.45,  0.00],
+    rot:   [0, 0, 0],
+    scale: 1.0,
+    label: 'Kafatası ve Yüz'
+  },
+  spine: {
+    id: 'spine',
+    file: 'models/omurga.glb',
+    pos:   [0,  0.20, -0.04],
+    rot:   [0, 0, 0],
+    scale: 1.0,
+    label: 'Omurga'
+  },
+  thorax: {
+    id: 'thorax',
+    file: 'models/gogus.glb',
+    pos:   [0,  0.35,  0.02],
+    rot:   [0, 0, 0],
+    scale: 1.0,
+    label: 'Göğüs Kafesi'
+  },
+  upperLimb: {
+    id: 'upperLimb',
+    file: 'models/ust_ekstremite.glb',
+    pos:   [0,  0.35,  0.00],
+    rot:   [0, 0, 0],
+    scale: 1.0,
+    label: 'Omuz ve Üst Ekstremite'
+  },
+  lowerLimb: {
+    id: 'lowerLimb',
+    file: 'models/alt_ekstremite.glb',
+    pos:   [0, -0.65,  0.00],
+    rot:   [0, 0, 0],
+    scale: 1.0,
+    label: 'Kalça ve Alt Ekstremite'
+  }
+};
+
+/* ============================================================================
+   BÖLÜM D · ANA BÖLGELER
+   ============================================================================
+   PDF'teki 5 ana grup. Her biri kendi alt bölgelerini içerir.
+   ============================================================================ */
+const MAIN_REGIONS = {
+  head: {
+    id: 'head',
+    name: 'Kafatası ve Yüz Bölgesi',
+    latin: 'Cranium et Facies',
+    totalBones: 29,
+    icon: '💀',
+    color: '#ff6b6b',
+    description: 'Başın tamamını oluşturan 29 kemik: 8 kafatası kemiği, 14 yüz kemiği, 6 kulak kemikçiği ve 1 hyoid. Beyni, duyu organlarını ve solunum yolunun üst kısmını korur.',
+    subRegions: ['cranium', 'face', 'ear', 'hyoid']
+  },
+  spine: {
+    id: 'spine',
+    name: 'Omurga (Vertebra) Sistemi',
+    latin: 'Columna Vertebralis',
+    totalBones: 26,
+    icon: '🦴',
+    color: '#a29bfe',
+    description: 'Boyundan kuyruk sokumuna uzanan 26 omur. Vücudun ana taşıyıcı sütunu; başı dengede tutar, gövdeyi ayakta tutar ve omuriliği korur.',
+    subRegions: ['spine']
+  },
+  thorax: {
+    id: 'thorax',
+    name: 'Göğüs Kafesi',
+    latin: 'Cavea Thoracis',
+    totalBones: 25,
+    icon: '🫁',
+    color: '#ff9ff3',
+    description: 'Kalp ve akciğerleri koruyan 25 kemik: 1 sternum + 24 kaburga (12 çift). Solunum hareketini sağlar.',
+    subRegions: ['thorax']
+  },
+  upperLimb: {
+    id: 'upperLimb',
+    name: 'Omuz ve Üst Ekstremite',
+    latin: 'Membrum Superius',
+    totalBones: 64,
+    icon: '💪',
+    color: '#00d2d3',
+    description: 'Omuz kuşağı, kol, ön kol ve eli oluşturan 64 kemik. Kavrama, kaldırma ve hassas motor hareketler.',
+    subRegions: ['shoulder', 'arm', 'hand']
+  },
+  lowerLimb: {
+    id: 'lowerLimb',
+    name: 'Kalça ve Alt Ekstremite',
+    latin: 'Membrum Inferius',
+    totalBones: 62,
+    icon: '🦵',
+    color: '#10ac84',
+    description: 'Kalça, bacak, ayak bileği ve ayak parmaklarını oluşturan 62 kemik. Yürüme, koşma, zıplama ve vücut ağırlığını taşıma.',
+    subRegions: ['pelvis', 'leg', 'foot']
+  }
+};
+
+/* ============================================================================
+   BÖLÜM E · ALT BÖLGELER
+   ============================================================================ */
+const SUB_REGIONS = {
+  cranium: { name: 'Kafatası',      color: '#ff6b6b', icon: '🧠' },
+  face:    { name: 'Yüz',            color: '#feca57', icon: '😊' },
+  ear:     { name: 'Kulak Kemikçikleri', color: '#48dbfb', icon: '👂' },
+  hyoid:   { name: 'Hyoid',          color: '#1dd1a1', icon: '🔗' },
+  spine:   { name: 'Omurga',         color: '#a29bfe', icon: '🦴' },
+  thorax:  { name: 'Göğüs Kafesi',   color: '#ff9ff3', icon: '🫁' },
+  shoulder:{ name: 'Omuz Kuşağı',    color: '#54a0ff', icon: '💪' },
+  arm:     { name: 'Kol',            color: '#00d2d3', icon: '🦾' },
+  hand:    { name: 'El',             color: '#9b7cff', icon: '✋' },
+  pelvis:  { name: 'Kalça',          color: '#ff6348', icon: '🦵' },
+  leg:     { name: 'Bacak',          color: '#10ac84', icon: '🦿' },
+  foot:    { name: 'Ayak',           color: '#f368e0', icon: '🦶' },
+  sesamoid:{ name: 'Sesamoid',       color: '#c8d6e5', icon: '⚪' }
+};
+
+/* ============================================================================
+   BÖLÜM F · KEMİK VERİSİ
+   ============================================================================
+   PDF'ten tam alıntı. Her kayıt:
+   key      → görsel dosya adı (images/[key].png)
+   latin    → Latince adı
+   turkish  → Türkçe adı
+   region   → alt bölge anahtarı
+   count    → kaç adet (1, 2, 5, "değişken" gibi)
+   icon     → küçük emoji
+   func     → "Ne işe yarar?"
+   daily    → "Günlük hayatta"
+   clinical → "Klinik ipucu"
+   ============================================================================ */
+const BONE_DATA = [
+
+  /* ======================== KAFATASI ======================== */
+  {
+    key: 'frontal',
+    latin: 'Os Frontale',
+    turkish: 'Frontal Kemik',
+    region: 'cranium',
+    count: '1',
+    icon: '🟥',
+    func: 'Alın bölgesini, kaş kavislerini ve göz çukurlarının tavanını oluşturur. Beynin ön lobunu dış darbelere karşı zırh gibi korur.',
+    daily: 'Alnına darbe aldığında beyni koruyan ana kalkandır. Yüz ifadesi ve alın hareketleri bu kemiğin altındaki kaslarla çalışır.',
+    clinical: 'Frontal sinüs bu kemiğin içindedir; sinüzit ağrıları sıklıkla alın bölgesine vurur.'
+  },
+  {
+    key: 'parietal',
+    latin: 'Os Parietale',
+    turkish: 'Parietal Kemik',
+    region: 'cranium',
+    count: '2',
+    icon: '🟥',
+    func: 'Kafatasının üst ve yan duvarlarını örten simetrik çift kemiktir. Beynin üst korteksini çevreleyerek mekanik travmalara karşı üst koruma kalkanı oluşturur. Kafatası boşluğunun en geniş hacmini kaplayan temel duvarlardır.',
+    daily: 'Başını bir yere çarptığında beyni üstten koruyan kubbenin büyük kısmını oluşturur.',
+    clinical: 'Bebeklerde bu kemikler arasında kalan ön fontanel 18. aya kadar kapanır; kapanma gecikmesi raşitizm işareti olabilir.'
+  },
+  {
+    key: 'temporal',
+    latin: 'Os Temporale',
+    turkish: 'Temporal Kemik',
+    region: 'cranium',
+    count: '2',
+    icon: '🟥',
+    func: 'Kafatasının yan ve alt kısımlarını oluşturur. İçinde hem işitme hem denge organlarını barındıran hassas kemik labirentini saklar. Çene eklemiyle bağlantı kurarak başın bu bölgesindeki mekanik dengesini sağlar.',
+    daily: 'Kulak kepçesinin hemen arkasındaki sert çıkıntıdır; telefonu kulağına götürdüğünde parmağının dayandığı kemik.',
+    clinical: 'Mastoid çıkıntı buradadır; orta kulak iltihabı mastoidite dönüşebilir. Yüz siniri bu kemikten geçer.'
+  },
+  {
+    key: 'oksipital',
+    latin: 'Os Occipitale',
+    turkish: 'Oksipital Kemik',
+    region: 'cranium',
+    count: '1',
+    icon: '🟥',
+    func: 'Kafatasının en arka alt kısmında yer alır. İçindeki büyük delik (foramen magnum) sayesinde beyin ile omuriliğin birleşme noktasına ev sahipliği yapar. Başın ağırlığını omurgaya aktararak omurilik çıkışını güvenle çevreler.',
+    daily: 'Başını arkaya yatırdığında ense kökünde eline gelen sertlik bu kemiğin dış çıkıntısıdır.',
+    clinical: 'Foramen magnum çevresi kırıkları hayati risk taşır; beyin sapı buradan geçer.'
+  },
+  {
+    key: 'sfenoid',
+    latin: 'Os Sphenoidale',
+    turkish: 'Sfenoid Kemik',
+    region: 'cranium',
+    count: '1',
+    icon: '🟥',
+    func: 'Kafatası tabanının merkezinde kelebek biçiminde yer alır. Diğer tüm kafa kemikleriyle eklem yaparak kafatası tabanını birbirine kilitler. Optik sinirlerin ve şahdamarın geçiş yollarını çevreleyerek bu hayati yapıları kemik bir kalkan içinde korur. Ayrıca hipofiz bezinin oturduğu çukurluğa (sella turcica - Türk eyeri) ev sahipliği yaparak endokrin sistemin merkeziyle doğrudan anatomik bağlantı kurar.',
+    daily: 'Görme ve hormon sisteminin merkezini koruyan gizli kemerdir; doğrudan dokunamazsın ama hayati önemdedir.',
+    clinical: 'Pituitary adenomlar sella turcica’yı genişletir; görme alanı defektleri yapabilir.'
+  },
+  {
+    key: 'etmoid',
+    latin: 'Os Ethmoidale',
+    turkish: 'Etmoid Kemik',
+    region: 'cranium',
+    count: '1',
+    icon: '🟥',
+    func: 'Göz çukurlarının arasında ve burun tavanında yer alan gözenekli kemiktir. Koku sinirlerinin beyne ulaşması için geçiş delikleri sunar. Solunan havanın filtrasyon yüzeyini genişleterek burun içi anatomisini destekler.',
+    daily: 'Koku alma duyusunun kemiğe bağlı kısmıdır; nezle olduğunda koku alamaman bu bölgenin tıkanmasındandır.',
+    clinical: 'Kribriform plak kırıklarında BOS rinoresi (burundan beyin omurilik sıvısı) görülebilir.'
+  },
+
+  /* ======================== YÜZ ======================== */
+  {
+    key: 'maksilla',
+    latin: 'Maxilla',
+    turkish: 'Maksilla (Üst Çene)',
+    region: 'face',
+    count: '2',
+    icon: '🟨',
+    func: 'Yüzün merkezini oluşturur, üst diş köklerini taşır ve burun tabanı ile göz çukurunun alt duvarını meydana getirir. Çiğneme kuvvetini kafatası tabanına ileten kilit bir iskelet yapısıdır.',
+    daily: 'Gülümserken üst dişlerin oturduğu kemik; ısırma kuvvetinin ana taşıyıcısı.',
+    clinical: 'Le Fort kırıkları bu bölgede sınıflanır; yüz travmalarında hava yolu açıklığı riski vardır.'
+  },
+  {
+    key: 'palatin',
+    latin: 'Os Palatinum',
+    turkish: 'Palatin Kemiği',
+    region: 'face',
+    count: '2',
+    icon: '🟨',
+    func: 'Ağız tavanının arka kısmını ve burun boşluğunun tabanını oluşturarak ağız ile burun boşluğunu birbirinden ayırır.',
+    daily: 'Yemek yerken sıcak/soğuk yiyeceklerin burun boşluğuna kaçmasını engelleyen bariyerdir.',
+    clinical: 'Yarık damak anomalilerinde palatin kemik de etkilenir.'
+  },
+  {
+    key: 'zigomatik',
+    latin: 'Os Zygomaticum',
+    turkish: 'Zigomatik Kemik (Elmacık)',
+    region: 'face',
+    count: '2',
+    icon: '🟨',
+    func: 'Yüzün yanak çıkıntısını oluşturur ve göz çukurunun dış yan duvarını destekler. Göz küresini dış darbelere karşı yandan koruyan sağlam bir köprü görevi görür.',
+    daily: 'Gülümsediğinde yanakta belirginleşen elmacık çıkıntısıdır; yüz estetiğinin ana kemiklerinden.',
+    clinical: 'Zigomatik kırıklar yüz travmalarında sık; çift görme (diplopi) yapabilir.'
+  },
+  {
+    key: 'nazal',
+    latin: 'Os Nasale',
+    turkish: 'Nazal Kemik',
+    region: 'face',
+    count: '2',
+    icon: '🟨',
+    func: 'Burnun üst köprüsünü oluşturarak burun boşluğunun üst çatısını korur. Nazal kıkırdaklara çatı sağlayarak burun yapısının formunu sabitler.',
+    daily: 'Gözlük takarken burnun üst kısmına oturan bölge bu kemiktir.',
+    clinical: 'Burun kırıklarında sık etkilenir; burun kanaması ve şekil bozukluğu görülür.'
+  },
+  {
+    key: 'lakrimal',
+    latin: 'Os Lacrimale',
+    turkish: 'Lakrimal Kemik',
+    region: 'face',
+    count: '2',
+    icon: '🟨',
+    func: 'Göz çukurunun iç duvarındaki en küçük yüz kemiğidir. Gözyaşının burun boşluğuna akmasını sağlayan kanalın yapısına katılır. Göz yüzeyinin nem dengesini koruyan drenaj sistemini destekler.',
+    daily: 'Ağladığında gözyaşının gözden buruna akmasını sağlayan kanalın başlangıcı bu kemiktedir.',
+    clinical: 'Nazolakrimal kanal tıkanıklığında göz sulanması ve enfeksiyon görülür.'
+  },
+  {
+    key: 'konka',
+    latin: 'Concha Nasalis Inferior',
+    turkish: 'İnferior Nazal Konka',
+    region: 'face',
+    count: '2',
+    icon: '🟨',
+    func: 'Burun boşluğundaki kıvrımlı kemik yapıdır. Solunan havayı türbülansa sokarak ısıtır, nemlendirir ve temizler. Solunum yoluna giren havanın akciğerler için uygun niteliğe gelmesini sağlar.',
+    daily: 'Soğuk havayı burnunda ısıtan sistemin ana parçası; kışın burnunun içinin ısınmasını sağlar.',
+    clinical: 'Konka hipertrofisi burun tıkanıklığının yaygın sebebidir.'
+  },
+  {
+    key: 'vomer',
+    latin: 'Vomer',
+    turkish: 'Vomer (Sapan Kemiği)',
+    region: 'face',
+    count: '1',
+    icon: '🟨',
+    func: 'Burun boşluğunu sağ ve sol olarak ikiye ayıran dikey bölme kemiğidir. Nazal septumun alt-arka kısmını oluşturarak soluk yolunun simetrisini destekler.',
+    daily: 'Nefes alırken iki burun deliğinden gelen havanın yönünü belirleyen bölmenin alt kısmıdır.',
+    clinical: 'Septum deviasyonu tek taraflı burun tıkanıklığına yol açar; vomer sık etkilenir.'
+  },
+  {
+    key: 'mandibula',
+    latin: 'Mandibula',
+    turkish: 'Mandibula (Alt Çene)',
+    region: 'face',
+    count: '1',
+    icon: '🟨',
+    func: 'Kafatasındaki tek hareketli kemiktir. Çiğneme kaslarının tutunma yüzeyini oluşturur ve alt dişleri barındırır. Konuşma ve öğütme fonksiyonlarını gerçekleştiren dinamik bir iskelet elemanıdır.',
+    daily: 'Konuşma, çiğneme, esneme — günlük hayatın en çok kullanılan kemiği.',
+    clinical: 'TMJ disfonksiyonu klik sesi ve ağrı yapar. Mandibula kırıkları yüz travmasında sık.'
+  },
+
+  /* ======================== KULAK ======================== */
+  {
+    key: 'malleus',
+    latin: 'Malleus',
+    turkish: 'Çekiç Kemiği',
+    region: 'ear',
+    count: '2',
+    icon: '🟦',
+    func: 'Kulak zarının iç yüzeyine sıkıca tutunmuştur. Kulak zarındaki ses titreşimlerini ilk yakalayan minik kemiktir. Mekanik dalgaları bir sonraki kulakçığa aktarır.',
+    daily: 'Duymana yarayan zincirin ilk halkası; sesin kemiğe aktarıldığı yer.',
+    clinical: 'Otosklerozda en sık etkilenen kemikçiktir; iletim tipi işitme kaybı yapar.'
+  },
+  {
+    key: 'incus',
+    latin: 'Incus',
+    turkish: 'Örs Kemiği',
+    region: 'ear',
+    count: '2',
+    icon: '🟦',
+    func: 'Çekiç ile üzengi arasında yer alarak mekanik titreşim köprüsü kurar. Ses dalgalarının gücünü kaybetmeden orta kulaktan iç kulağa iletilmesini sağlar.',
+    daily: 'Duyma zincirinin orta halkası; sesin gücünü artıran mekanik kaldıraç.',
+    clinical: 'Kronik orta kulak iltihabı incus erozyonuna ve işitme kaybına yol açabilir.'
+  },
+  {
+    key: 'stapes',
+    latin: 'Stapes',
+    turkish: 'Üzengi Kemiği',
+    region: 'ear',
+    count: '2',
+    icon: '🟦',
+    func: 'Vücudun en küçük kemiğidir. Ses dalgalarını iç kulağın sıvı dolu odacığına mekanik olarak iletir. İşitme sinirlerinin uyarılması için son basamakta basınç üretir.',
+    daily: 'Duymanın son kemiği; bu kemik olmasa ses sıvıya aktarılamaz ve duyamazsın.',
+    clinical: 'Stapes tabanındaki fiksasyon (otoskleroz) en sık işitme kaybı nedenlerindendir. Vücudun en küçük kemiği (~3 mm).'
+  },
+
+  /* ======================== HYOID ======================== */
+  {
+    key: 'hyoid',
+    latin: 'Os Hyoideum',
+    turkish: 'Hyoid (Dil Kemiği)',
+    region: 'hyoid',
+    count: '1',
+    icon: '🟩',
+    func: 'Boyunda kaslar arasında asılı duran, hiçbir kemikle eklem yapmayan tek kemiktir. Dil kökünü ve gırtlağı destekleyerek yutkunma ve solunum yollarının açıklığını korur. Boyun kaslarının yardımıyla konuşma mekaniğine zemin hazırlar.',
+    daily: 'Yutkunma, konuşma ve nefes almanın sessiz kahramanı. Çeneni kaldırdığında eline gelen sertlik bu kemik civarıdır.',
+    clinical: 'Adli tıpta boğma vakalarında kırığı araştırılır; sadece kaslara bağlıdır.'
+  },
+
+  /* ======================== OMURGA ======================== */
+  {
+    key: 'atlas',
+    latin: 'Atlas (C1)',
+    turkish: 'Atlas Omuru (C1)',
+    region: 'spine',
+    count: '1',
+    icon: '🟪',
+    func: 'Kafatasını doğrudan üstünde destekler ve başın öne-arkaya hareketini sağlar.',
+    daily: '“Evet” der gibi başını salladığında çalışan omurdur.',
+    clinical: 'Atlantoaksiyel instabilite (Down sendromu, romatoid artrit) risklidir.'
+  },
+  {
+    key: 'axis',
+    latin: 'Axis (C2)',
+    turkish: 'Axis Omuru (C2)',
+    region: 'spine',
+    count: '1',
+    icon: '🟪',
+    func: 'Başın dönme eksenini oluşturan özel dişli çıkıntıya (dens) sahiptir.',
+    daily: '“Hayır” der gibi başını sağa-sola çevirdiğinde çalışan omurdur.',
+    clinical: 'Odontoid (dens) kırıkları hayati risk taşır; boyun travmasında ilk bakılır.'
+  },
+  {
+    key: 'cervical',
+    latin: 'Vertebrae Cervicales (C3-C7)',
+    turkish: 'Boyun Omurları (C3–C7)',
+    region: 'spine',
+    count: '5',
+    icon: '🟪',
+    func: 'Boyun omurgasının alt kısmını oluşturan bu 5 omur, üst vücudun esnekliğini ve başın dengeli taşınmasını sağlar. Gövde (corpus) kısımları küçük ve kareye yakın olup, yük taşımaktan çok hareket kabiliyeti için tasarlanmıştır. Eklem çıkıntıları sayesinde başın yana eğilmesi ve döndürülmesi gibi hareketlere olanak tanır. Vertebral arterin geçişine ev sahipliği yapar.',
+    daily: 'Telefona bakarken boynunu öne eğdiğinde yükü taşıyan omurlardır.',
+    clinical: 'Boyun fıtığı ve servikal spondiloz bu bölgede sık; kola vuran ağrı yapabilir.'
+  },
+  {
+    key: 'thoracic',
+    latin: 'Vertebrae Thoracicae (T1-T12)',
+    turkish: 'Sırt Omurları (T1–T12)',
+    region: 'spine',
+    count: '12',
+    icon: '🟪',
+    func: 'Göğüs kafesine arkadan bağlanarak sağlam bir omurga tüneli oluşturur. Hareket kısıtlılığı olan bu bölge göğüs omurgasının içe eğriliğini destekler. Kaburgalarla eklemleşerek kalp ve akciğerleri çevreleyen kafesin arkasını mühürler.',
+    daily: 'Sırtını dik tutan, nefes alırken kaburgaları taşıyan omurga bölümü.',
+    clinical: 'Torakal omurga hareketi kısıtlıdır; osteoporotik kompresyon kırıkları burada sık.'
+  },
+  {
+    key: 'lumbar',
+    latin: 'Vertebrae Lumbales (L1-L5)',
+    turkish: 'Bel Omurları (L1–L5)',
+    region: 'spine',
+    count: '5',
+    icon: '🟪',
+    func: 'Omurganın en büyük ve en kalın hareketli omurlarıdır. Üst vücut ağırlığının alt bölgelere aktarılmasında ana taşıyıcı sütun görevi görür. Karın boşluğunun arkasını destekleyerek bel çukurunu (lordoz) oluşturur.',
+    daily: 'Ağır kaldırırken beline binen yükü taşıyan omurlardır.',
+    clinical: 'Bel fıtığı (disk hernisi) en sık L4-L5 ve L5-S1 seviyesindedir.'
+  },
+  {
+    key: 'sakrum',
+    latin: 'Os Sacrum',
+    turkish: 'Sakrum (Sağrı Kemiği)',
+    region: 'spine',
+    count: '1',
+    icon: '🟪',
+    func: '5 omurun ergenlikte kaynaşmasıyla oluşan ters üçgen kemiktir. Omurga yükünü pelvis kemiklerine transfer eden ana köprüdür. Pelvis halkasının arkasını kapatarak leğen kemiğini sabitler.',
+    daily: 'Otururken ağırlığın pelvise aktarıldığı merkez kemik.',
+    clinical: 'Sakrum kırıkları pelvis travmasında ciddi; nörolojik defisit yapabilir.'
+  },
+  {
+    key: 'koksiks',
+    latin: 'Os Coccygis',
+    turkish: 'Koksiks (Kuyruk Sokumu)',
+    region: 'spine',
+    count: '1',
+    icon: '🟪',
+    func: 'Omurganın en alt ucundaki kaynaşmış minik omurlardır. Pelvis taban kaslarına tutunma alanı sağlar. Oturma esnasında ağırlık merkezinin dengelenmesine hafif düzeyde katkı sunar.',
+    daily: 'Uzun süre sert zeminde oturunca ağrıyan bölge koksiks bölgesidir.',
+    clinical: 'Koksidini (kuyruk sokumu ağrısı) düşme sonrası sık görülür.'
+  },
+
+  /* ======================== GÖĞÜS ======================== */
+  {
+    key: 'sternum',
+    latin: 'Sternum',
+    turkish: 'Sternum (İman Tahtası)',
+    region: 'thorax',
+    count: '1',
+    icon: '🩷',
+    func: 'Göğsün ortasında yer alan yassı ve hançer biçimli kemiktir. Kalbi ve büyük damarları önden koruyan ana kalkan görevi görür. Kaburgaların ön ucunu sabitleyerek göğüs kafesinin simetrisini sağlar.',
+    daily: 'Göğsünün ortasına dokunduğunda eline gelen düz kemik; kalp masajında basılan yer.',
+    clinical: 'Sternal kırık genelde ciddi travmada görülür; kalp ve aort yaralanması eşlik edebilir.'
+  },
+  {
+    key: 'ribs',
+    latin: 'Costae (1-12)',
+    turkish: 'Kaburgalar (12 Çift)',
+    region: 'thorax',
+    count: '24',
+    icon: '🩷',
+    func: 'Göğüs kafesi hacmini değiştirerek solunum mekaniğini sağlar ve kalp-akciğerleri dış travmalardan izole eder. 1-7. çiftler (gerçek) doğrudan sternuma kıkırdakla bağlanır. 8-10. çiftler (yalancı) kıkırdak yoluyla üst kaburgaya tutunur. 11-12. çiftler (yüzen) önde serbesttir.',
+    daily: 'Nefes alıp verirken göğsünün genişleyip daralması kaburgaların hareketiyle olur.',
+    clinical: 'Kaburga kırıkları pnömotoraks (akciğer sönmesi) yapabilir. 5-9. kaburgalar en sık kırılanlardır.'
+  },
+
+  /* ======================== OMUZ ======================== */
+  {
+    key: 'klavikula',
+    latin: 'Clavicula',
+    turkish: 'Klavikula (Köprücük Kemiği)',
+    region: 'shoulder',
+    count: '2',
+    icon: '🔵',
+    func: 'Göğüs kafesi ile kürek kemiği arasında köprü kurar. Üst ekstremitenin gövdeden uzakta, geniş bir hareket alanına sahip olmasını sağlar. Omuz eklemine mekanik destek sunan yatay bir payandadır.',
+    daily: 'Omuzlarını geriye attığında belirginleşen “V” şeklindeki kemik; çanta askısının oturduğu yer.',
+    clinical: 'Doğumda en sık kırılan kemik; omuz çıkıklarında da sık yaralanır. Orta üçte birlik kısmı en zayıf noktasıdır.'
+  },
+  {
+    key: 'skapula',
+    latin: 'Scapula',
+    turkish: 'Skapula (Kürek Kemiği)',
+    region: 'shoulder',
+    count: '2',
+    icon: '🔵',
+    func: 'Sırtın üstünde yassı ve üçgen yapılı kemiktir. Omuz ekleminin hareket tabanını oluşturarak kolun gövdeye bağlanmasını sağlar. Sırt kaslarının tutunması için geniş bir yüzey alanı sunar.',
+    daily: 'Kürek kemiği çıkıntısı; sırt çantası takarken kayışın oturduğu bölge.',
+    clinical: 'Kanat skapula (winging) uzun torasik sinir hasarında görülür. Skapula kırıkları yüksek enerjili travmada oluşur.'
+  },
+
+  /* ======================== KOL ======================== */
+  {
+    key: 'humerus',
+    latin: 'Humerus',
+    turkish: 'Humerus (Pazı Kemiği)',
+    region: 'arm',
+    count: '2',
+    icon: '🟢',
+    func: 'Omuz ile dirsek arasındaki uzun kemiktir. Üst kol kaslarının tutunduğu ana kaldıraç koludur. Omuzdan aldığı kuvveti dirseğe aktararak kolun genel taşıyıcılığını üstlenir.',
+    daily: 'Kolunu kaldırıp bir şey uzattığında çalışan kol kemiği.',
+    clinical: 'Humerus boyun kırığında radial sinir hasarı → el bileği düşüklüğü (wrist drop).'
+  },
+  {
+    key: 'radius',
+    latin: 'Radius',
+    turkish: 'Radius (Döner Kemik)',
+    region: 'arm',
+    count: '2',
+    icon: '🟢',
+    func: 'Ön kolda başparmak tarafındaki kemiktir. Ön kolun dönme hareketini (pronasyon-supinasyon) sağlar. Dirsek ve el bileği arasında dinamik bir köprü kurar.',
+    daily: 'Avucunu yukarı-aşağı çevirdiğinde radius döner; tornavida çevirme hareketinin temeli.',
+    clinical: 'Distal radius kırığı (Colles) düşme sonrası en sık kırıklardan biridir.'
+  },
+  {
+    key: 'ulna',
+    latin: 'Ulna',
+    turkish: 'Ulna (Dirsek Kemiği)',
+    region: 'arm',
+    count: '2',
+    icon: '🟢',
+    func: 'Ön kolda serçe parmak tarafındaki kemiktir. Dirsek ekleminin ana menteşe yapısını oluşturur. Ön kolun yapısal uzunluğunu ve ana iskelet direncini korur.',
+    daily: 'Dirseğini masaya dayadığında temas eden kemik çıkıntısı (olekranon) ulna’ya aittir.',
+    clinical: 'Olekranon kırığı dirsek ekstansiyonunu bozar; “funny bone” çarpması ulnar sinir kaynaklıdır.'
+  },
+
+  /* ======================== EL ======================== */
+  {
+    key: 'karpal',
+    latin: 'Ossa Carpi',
+    turkish: 'Karpaller (El Bilek Kemikleri)',
+    region: 'hand',
+    count: '16',
+    icon: '🟣',
+    func: 'İki sıra halinde dizilmiş 8’er kısa kemiktir. Bilek ekleminin esnekliğini ve şok emilimini sağlar. Elin çok yönlü hareket etmesi için karmaşık bir eklem yüzeyi oluşturur. Proksimal sıra: skafoid, lunat, trikuetrum, pisiform. Distal sıra: trapezium, trapezoid, kapitat, hamat.',
+    daily: 'Düşerken elini uzattığında şoku emen sünger görevi görür.',
+    clinical: 'Skafoid kırığı sık ve kaynaması zor; avasküler nekroz riski yüksek.'
+  },
+  {
+    key: 'metakarpal',
+    latin: 'Ossa Metacarpi',
+    turkish: 'Metakarpaller (El Tarak Kemikleri)',
+    region: 'hand',
+    count: '10',
+    icon: '🟣',
+    func: 'Avucun iskelet çatısını oluşturur. Parmaklara giden tendonlar için taban desteği sağlar. Nesneleri kavramak için el ayasına kubbe formu verir.',
+    daily: 'Yumruk yaptığında öne çıkan eklemler metakarpallerin uçlarıdır.',
+    clinical: '5. metakarp boyun kırığı (“boxer’s fracture”) yumruk atma sonrası sık görülür.'
+  },
+  {
+    key: 'falanks_el',
+    latin: 'Phalanges Manus',
+    turkish: 'El Parmak Kemikleri',
+    region: 'hand',
+    count: '28',
+    icon: '🟣',
+    func: 'Parmakların eklemli iskeletini oluşturur. Kavrama ve tutma fonksiyonlarının mekanik temelini hazırlar. Hassas motor hareketlerin yapılmasına olanak tanır. Her elde 14 falanks: başparmakta 2, diğer parmaklarda 3.',
+    daily: 'Klavye yazma, düğme ilikleme, kalem tutma — hepsi falankslar sayesinde.',
+    clinical: 'Distal falanks kırıkları ezilme travmasında sık; tırnak altı hematomu yapabilir.'
+  },
+
+  /* ======================== PELVIS ======================== */
+  {
+    key: 'pelvis',
+    latin: 'Os Coxae',
+    turkish: 'Pelvis (Kalça Kemiği)',
+    region: 'pelvis',
+    count: '2',
+    icon: '🔴',
+    func: 'Vücudun ağırlık merkezini alt ekstremitelere aktarır. İç organları çanak gibi sararak korur. Bacak kaslarının tutunması için geniş bir yüzey alanı sunar. Üç kemiğin kaynaşmasıyla oluşur: ilyum, işkiyum, pubis.',
+    daily: 'Otururken ağırlığın dağıldığı leğen kemiği; kalça hareketlerinin merkezi.',
+    clinical: 'Pelvis kırıkları yüksek enerjili travmada hayati kanama yapabilir. Kalça protezi ameliyatlarında femur başı bu kemikle eklem yapar.'
+  },
+
+  /* ======================== BACAK ======================== */
+  {
+    key: 'femur',
+    latin: 'Femur',
+    turkish: 'Femur (Uyluk Kemiği)',
+    region: 'leg',
+    count: '2',
+    icon: '🟢',
+    func: 'Vücudun en uzun, en güçlü ve en ağır kemiğidir. Yerçekimi direncine karşı bindiği devasa basınçları taşır. Kalça ile diz eklemi arasında ana köprü görevi görür.',
+    daily: 'Her adımda vücut ağırlığının 3-4 katını taşır; merdiven çıkarken daha da fazlasını.',
+    clinical: 'Femur boyun kırığı yaşlılarda sık ve mortalitesi yüksek; kalça protezi gerektirir.'
+  },
+  {
+    key: 'patella',
+    latin: 'Patella',
+    turkish: 'Patella (Diz Kapağı)',
+    region: 'leg',
+    count: '2',
+    icon: '🟢',
+    func: 'Kuadriseps tendonunun içinde yer alan sesamoid kemiktir. Diz açılmasında kaldıraç verimliliğini artırır. Diz eklemini önden gelebilecek darbelere karşı korur.',
+    daily: 'Dizini büktüğünde öne çıkan, diz kapağı dediğin kemik.',
+    clinical: 'Patella çıkığı gençlerde sık; patellofemoral ağrı sendromu koşucularda yaygın.'
+  },
+  {
+    key: 'tibia',
+    latin: 'Tibia',
+    turkish: 'Tibia (Kaval Kemiği)',
+    region: 'leg',
+    count: '2',
+    icon: '🟢',
+    func: 'Alt bacakta ağırlık taşıyan ana ve kalın kemiktir. Dizden ayağa vücut ağırlığını doğrudan iletir. Alt bacak iskeletinin taşıyıcı sütunudur.',
+    daily: 'Baldırının önünde elinle hissettiğin sert kemik; futbolcularda tekmeye maruz kalan bölge.',
+    clinical: 'Tibia diafiz kırıkları açık kırığa yatkın; damar-sinir yaralanması eşlik edebilir.'
+  },
+  {
+    key: 'fibula',
+    latin: 'Fibula',
+    turkish: 'Fibula (Baldır Kemiği)',
+    region: 'leg',
+    count: '2',
+    icon: '🟢',
+    func: 'Tibia’nın yanında yer alan ince ve uzun bir kemiktir. Vücut ağırlığını doğrudan taşımamakla birlikte, ayak bileği ekleminin dış kısmını oluşturarak (lateral malleol) bileğe stabilite sağlar. Alt bacak kaslarının önemli bir kısmına tutunma yüzeyi sunar ve yürüyüş sırasında dengeye katkıda bulunur.',
+    daily: 'Ayak bileğini burktuğunda hasar gören lateral malleol bu kemiğe aittir.',
+    clinical: 'Fibula boyun kırığında peroneal sinir hasarı olabilir.'
+  },
+
+  /* ======================== AYAK ======================== */
+  {
+    key: 'tarsal',
+    latin: 'Ossa Tarsi',
+    turkish: 'Tarsaller (Ayak Bilek Kemikleri)',
+    region: 'foot',
+    count: '14',
+    icon: '🩷',
+    func: 'Topuk kemiği yere basışta darbeyi emer. Diğer tarsaller ayak kavisini destekler. Ayağın yere uyum sağlamasını kolaylaştırır. Her ayakta 7 tarsal: kalkaneus, talus, naviküler, küboid, medial kuneiform, intermediate kuneiform, lateral kuneiform.',
+    daily: 'Yürürken ayak kavisini koruyan, şoku emen sünger tabakası.',
+    clinical: 'Tarsal tünel sendromu tibial sinir basısıyla oluşur; ayak tabanında uyuşma yapar.'
+  },
+  {
+    key: 'metatarsal',
+    latin: 'Ossa Metatarsi',
+    turkish: 'Metatarsaller (Ayak Tarak Kemikleri)',
+    region: 'foot',
+    count: '10',
+    icon: '🩷',
+    func: 'Ayağın ön taban kemerini oluşturur. Yürüyüş esnasında vücut ağırlığını parmak uçlarına aktarır. Adım atma döngüsünde yaylanma görevi görür.',
+    daily: 'Yürürken ayağının ön kısmına binen ağırlığı taşıyan kemikler.',
+    clinical: 'Metatarsal stres kırıkları uzun yürüyüşlerde sık; 5. metatarsal Jones kırığı kaynaması zor.'
+  },
+  {
+    key: 'falanks_ayak',
+    latin: 'Phalanges Pedis',
+    turkish: 'Ayak Parmak Kemikleri',
+    region: 'foot',
+    count: '28',
+    icon: '🩷',
+    func: 'Yürüyüş döngüsünde dengenin sağlanmasını ve itme fazının tamamlanmasını sağlar. Zemin tutunmasını artırarak postural dengeye katkıda bulunur. Her ayakta 14 falanks.',
+    daily: 'Yürürken dengede kalmanı sağlayan parmak kemikleri; koşarken itiş gücü üretir.',
+    clinical: 'Hallux valgus (bunyon) deformitesi sık görülür.'
+  },
+
+  /* ======================== SESAMOID ======================== */
+  {
+    key: 'sesamoid',
+    latin: 'Ossa Sesamoidea',
+    turkish: 'Sesamoid Kemikler',
+    region: 'sesamoid',
+    count: 'değişken',
+    icon: '⚪',
+    func: 'El ve ayak başparmağı eklem kapsülleri içinde yer alan minik ek kemiklerdir. Tendonların kemik üzerindeki sürtünme direncini azaltır. Mekanik avantaj sağlayarak eklem hareketlerinin verimliliğini artırır.',
+    daily: 'Başparmak hareketinin kaygan ve verimli olmasını sağlar; ayakta ise başparmak tendonunu korur.',
+    clinical: 'Ayak başparmağı sesamoidleri (2 adet) sık iltihaplanır (sesamoidit); koşucularda ve baletlerde görülür. Patella da en büyük sesamoid kemiktir.'
+  }
+];
+
+/* ============================================================================
+   BÖLÜM G · UYGULAMA DURUMU
+   ============================================================================ */
+const STATE = {
+  // Three.js
+  scene: null,
+  camera: null,
+  renderer: null,
+  controls: null,
+
+  // Yüklenen GLB grupları: { regionId: THREE.Group }
+  loadedModels: {},
+
+  // Raycast
+  raycaster: new THREE.Raycaster(),
+  mouse: new THREE.Vector2(),
+
+  // Seçim
+  hoveredMesh: null,
+  selectedMesh: null,
+  originalMaterials: new WeakMap(),
+
+  // Görünüm
+  autoRotate: false,
+  wireframe: false,
+  theme: 'dark',
+
+  // Gezinme durumu
+  currentRegion: null,
+  currentSubRegion: null,
+
+  // Etkileşim
+  _dragging: false,
+  _pointerDownTime: 0,
+  _pointerDownX: 0,
+  _pointerDownY: 0,
+
+  // Model yüklendi mi?
+  modelsReady: false,
+  demoMode: false
+};
+
+/* ============================================================================
+   BÖLÜM H · YARDIMCI FONKSİYONLAR
+   ============================================================================ */
+
+/** Basit ve hızlı querySelector kısayolları */
+const $  = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+/** Türkçe karakter normalizasyonu ve küçük harf */
+function normalize(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[İIı]/g, 'i')
+    .replace(/[Şş]/g, 's')
+    .replace(/[Ğğ]/g, 'g')
+    .replace(/[Üü]/g, 'u')
+    .replace(/[Öö]/g, 'o')
+    .replace(/[Çç]/g, 'c')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/** HTML kaçış (XSS koruması) — kullanıcı metni değil ama iyi pratik */
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** BONE_DATA'da key ile kayıt bul */
+function findBoneByKey(key) {
+  return BONE_DATA.find(b => b.key === key) || null;
+}
+
+/** Bir alt bölgenin hangi ana bölgeye ait olduğunu bulur */
+function findParentRegion(subRegionKey) {
+  for (const [id, region] of Object.entries(MAIN_REGIONS)) {
+    if (region.subRegions.includes(subRegionKey)) return id;
+  }
+  return null;
+}
+
+/** Mesh isminden hangi kemiğe ait olduğunu bulmaya çalışır */
+function findBoneByMeshName(meshName) {
+  const n = normalize(meshName);
+  if (!n) return null;
+
+  // 1. Tam eşleşme (key)
+  for (const bone of BONE_DATA) {
+    if (normalize(bone.key) === n) return bone;
+  }
+
+  // 2. İçerik eşleşmesi (mesh ismi bone key'i içeriyor)
+  for (const bone of BONE_DATA) {
+    const k = normalize(bone.key);
+    if (k.length >= 4 && n.includes(k)) return bone;
+  }
+
+  // 3. Türkçe veya Latin isim içeriyor mu
+  for (const bone of BONE_DATA) {
+    if (n.includes(normalize(bone.turkish)) && bone.turkish.length >= 4) return bone;
+    if (n.includes(normalize(bone.latin)) && bone.latin.length >= 4) return bone;
+  }
+
+  return null;
+}
+
+/** Toast bildirimi */
+let _toastTimer = null;
+function showToast(message, icon, duration) {
+  const toast = $('#toast');
+  if (!toast) return;
+  const ico = toast.querySelector('.ico');
+  const msg = toast.querySelector('.msg');
+  if (ico) ico.textContent = icon || '✓';
+  if (msg) msg.textContent = message || '';
+
+  toast.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+  }, typeof duration === 'number' ? duration : 2200);
+}
+
+/** requestAnimationFrame tabanlı easing animasyonu */
+function animateCamera(targetPos, targetLookAt, duration, onDone) {
+  if (!STATE.camera || !STATE.controls) return;
+
+  const startPos = STATE.camera.position.clone();
+  const startTarget = STATE.controls.target.clone();
+  const endPos = targetPos.clone();
+  const endTarget = targetLookAt.clone();
+
+  const t0 = performance.now();
+  const dur = duration || 700;
+
+  function tick(now) {
+    const k = Math.min(1, (now - t0) / dur);
+    const e = k < 0.5
+      ? 2 * k * k
+      : 1 - Math.pow(-2 * k + 2, 2) / 2;
+
+    STATE.camera.position.lerpVectors(startPos, endPos, e);
+    STATE.controls.target.lerpVectors(startTarget, endTarget, e);
+
+    if (k < 1) {
+      requestAnimationFrame(tick);
+    } else if (typeof onDone === 'function') {
+      onDone();
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/** Cihaz bilgilerine göre ayar döner */
+function deviceSettings() {
+  if (DEVICE.isMobile) {
+    return {
+      dprMax: 2,
+      shadowsEnabled: false,
+      antialias: false,
+      maxPolarAngle: Math.PI * 0.95,
+      rotateSpeed: 1.0
+    };
+  }
+  if (DEVICE.isTablet) {
+    return {
+      dprMax: 2,
+      shadowsEnabled: false,
+      antialias: true,
+      maxPolarAngle: Math.PI * 0.92,
+      rotateSpeed: 0.9
+    };
+  }
+  return {
+    dprMax: 2,
+    shadowsEnabled: false,
+    antialias: true,
+    maxPolarAngle: Math.PI * 0.9,
+    rotateSpeed: 0.9
+  };
+}
+
+/* ============================================================================
+   BÖLÜM I · THREE.JS SAHNESİ KURULUMU
+   ============================================================================ */
+function initThree() {
+  const viewport = $('#viewport');
+  if (!viewport) throw new Error('#viewport bulunamadı');
+
+  const cfg = deviceSettings();
+
+  // --- Sahne ---
+  STATE.scene = new THREE.Scene();
+  STATE.scene.background = null;
+
+  // --- Kamera ---
+  const w = viewport.clientWidth || 800;
+  const h = viewport.clientHeight || 600;
+  STATE.camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 1000);
+  STATE.camera.position.set(0, 0.2, 3.6);
+
+  // --- Renderer ---
+  STATE.renderer = new THREE.WebGLRenderer({
+    antialias: cfg.antialias,
+    alpha: true,
+    powerPreference: 'high-performance',
+    preserveDrawingBuffer: false
+  });
+
+  const dpr = Math.min(window.devicePixelRatio || 1, cfg.dprMax);
+  STATE.renderer.setPixelRatio(dpr);
+  STATE.renderer.setSize(w, h);
+  STATE.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  STATE.renderer.toneMappingExposure = 1.05;
+  STATE.renderer.outputColorSpace = THREE.SRGBColorSpace;
+  STATE.renderer.shadowMap.enabled = cfg.shadowsEnabled;
+
+  viewport.appendChild(STATE.renderer.domElement);
+
+  // --- Kontroller ---
+  STATE.controls = new OrbitControls(STATE.camera, STATE.renderer.domElement);
+  STATE.controls.enableDamping = true;
+  STATE.controls.dampingFactor = 0.08;
+  STATE.controls.rotateSpeed = cfg.rotateSpeed;
+  STATE.controls.zoomSpeed = 0.9;
+  STATE.controls.panSpeed = 0.7;
+  STATE.controls.target.set(0, 0.2, 0);
+  STATE.controls.minDistance = 0.5;
+  STATE.controls.maxDistance = 8;
+  STATE.controls.autoRotateSpeed = 1.2;
+  STATE.controls.maxPolarAngle = cfg.maxPolarAngle;
+  STATE.controls.enablePan = true;
+  STATE.controls.screenSpacePanning = true;
+  STATE.controls.update();
+
+  // --- Işıklandırma ---
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x334155, 1.4);
+  STATE.scene.add(hemi);
+
+  const key = new THREE.DirectionalLight(0xffffff, 2.2);
+  key.position.set(3, 5, 4);
+  STATE.scene.add(key);
+
+  const fill = new THREE.DirectionalLight(0xffffff, 1.1);
+  fill.position.set(-4, 2, -3);
+  STATE.scene.add(fill);
+
+  const rim = new THREE.DirectionalLight(0xffffff, 1.4);
+  rim.position.set(0, -3, -2);
+  STATE.scene.add(rim);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  STATE.scene.add(ambient);
+
+  // Nokta ışığı (mobilde hafif)
+  if (!DEVICE.isMobile) {
+    const point = new THREE.PointLight(0x38bdf8, 0.6, 20);
+    point.position.set(0, -2, 2);
+    STATE.scene.add(point);
+  }
+
+  // --- Boyut olayları ---
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => {
+    // Yönelim değişiminde tarayıcı boyutları geç güncelliyor; bekle
+    setTimeout(onResize, 200);
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(onResize).observe(viewport);
+  }
+
+  // --- Render döngüsü ---
+  animate();
+}
+
+/* ============================================================================
+   BÖLÜM J · RENDER DÖNGÜSÜ
+   ============================================================================ */
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (STATE.controls) {
+    STATE.controls.autoRotate = STATE.autoRotate;
+    STATE.controls.update();
+  }
+
+  if (STATE.renderer && STATE.scene && STATE.camera) {
+    STATE.renderer.render(STATE.scene, STATE.camera);
+  }
+}
+
+/* ============================================================================
+   BÖLÜM K · BOYUT DEĞİŞİMİ
+   ============================================================================ */
+function onResize() {
+  const viewport = $('#viewport');
+  if (!viewport) return;
+
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  if (!w || !h) return;
+
+  STATE.camera.aspect = w / h;
+  STATE.camera.updateProjectionMatrix();
+  STATE.renderer.setSize(w, h);
+
+  // Cihaz sınıflarını güncelle (yönelim değişebilir)
+  const html = document.documentElement;
+  const orientation = w > h ? 'landscape' : 'portrait';
+
+  html.classList.remove('is-portrait', 'is-landscape');
+  html.classList.add('is-' + orientation);
+
+  // Device.type güncelle (çok küçük değişimlerde bile)
+  const newW = window.innerWidth;
+  const newType = (DEVICE.isTouch && newW < 600) ? 'mobile'
+                : (DEVICE.isTouch && newW < 1400) ? 'tablet'
+                : DEVICE.type;
+  if (newType !== DEVICE.type) {
+    DEVICE.type = newType;
+    DEVICE.isMobile  = newType === 'mobile';
+    DEVICE.isTablet  = newType === 'tablet';
+    DEVICE.isDesktop = newType === 'desktop';
+    html.classList.remove('is-mobile', 'is-tablet', 'is-desktop');
+    html.classList.add('is-' + newType);
+  }
+
+  DEVICE.isPortrait = orientation === 'portrait';
+  DEVICE.isLandscape = orientation === 'landscape';
+  DEVICE.width = w;
+  DEVICE.height = h;
+}
+
+/* ============================================================================
+   BÖLÜM L · GLB YÜKLEME
+   ============================================================================ */
+
+/** Ana yükleme fonksiyonu — 5 modeli paralel yükler */
+async function loadAllModels() {
+  const loader = new GLTFLoader();
+
+  // Draco sıkıştırma desteği
+  try {
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+    loader.setDRACOLoader(draco);
+  } catch (e) {
+    console.warn('Draco yüklenemedi, sıkıştırılmamış modeller çalışır', e);
+  }
+
+  const regionIds = Object.keys(GLB_LAYOUT);
+  const total = regionIds.length;
+  let loadedCount = 0;
+  let successCount = 0;
+  const failed = [];
+
+  // İlerleme güncelleme
+  function updateProgress() {
+    const pct = Math.round((loadedCount / total) * 100);
+    const fill = $('#progressFill');
+    const sub = $('#loadSub');
+    if (fill) fill.style.width = pct + '%';
+    if (sub) sub.textContent = `${loadedCount} / ${total} model yüklendi`;
+  }
+
+  // Tek bir modeli yükle
+  async function loadOne(regionId) {
+    const cfg = GLB_LAYOUT[regionId];
+    try {
+      const gltf = await loader.loadAsync(cfg.file);
+      const group = gltf.scene;
+
+      // Pozisyon / dönüş / ölçek
+      group.position.set(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
+      group.rotation.set(cfg.rot[0], cfg.rot[1], cfg.rot[2]);
+      group.scale.setScalar(cfg.scale);
+
+      // Her mesh'e bölge damgası vur
+      group.traverse(obj => {
+        if (!obj.isMesh) return;
+        obj.userData.regionId = regionId;
+        obj.userData.originalName = obj.name;
+        obj.userData.isBoneMesh = true;
+
+        // Orijinal materyali sakla
+        if (Array.isArray(obj.material)) {
+          STATE.originalMaterials.set(obj, obj.material.map(m => m.clone()));
+        } else {
+          STATE.originalMaterials.set(obj, obj.material.clone());
+        }
+
+        // Mesh isminden kemik eşleştirmesi denemesi
+        const bone = findBoneByMeshName(obj.name);
+        if (bone) {
+          obj.userData.boneKey = bone.key;
+          obj.userData.bone = bone;
+        }
+
+        // Gölge ayarları
+        obj.castShadow = false;
+        obj.receiveShadow = false;
+
+        // Frustum culling kapat (bazı modellerde hatalı olur)
+        obj.frustumCulled = false;
+      });
+
+      STATE.scene.add(group);
+      STATE.loadedModels[regionId] = group;
+      successCount++;
+    } catch (err) {
+      console.warn('Model yüklenemedi:', cfg.file, err);
+      failed.push({ id: regionId, file: cfg.file, error: String(err && err.message || err) });
+    } finally {
+      loadedCount++;
+      updateProgress();
+    }
+  }
+
+  // Hepsini paralel başlat
+  await Promise.all(regionIds.map(id => loadOne(id)));
+
+  // Sonuçları göster
+  STATE.modelsReady = true;
+
+  // Kamerayı tüm modele göre çerçevele
+  frameAll();
+
+  // UI güncelle
+  const badge = $('#badgeModel');
+  if (badge) {
+    if (successCount === 0) {
+      badge.textContent = 'Demo';
+      showErrorBanner(failed);
+    } else if (successCount < total) {
+      badge.textContent = `${successCount}/${total} GLB`;
+      showToast(`${successCount}/${total} model yüklendi · bazıları eksik`, '⚠️', 3500);
+    } else {
+      badge.textContent = `${successCount} GLB`;
+      showToast(`${successCount} bölge başarıyla yüklendi`, '✓', 2400);
+    }
+  }
+
+  // Yükleniyor ekranını kapat
+  const loading = $('#loading');
+  if (loading) loading.classList.add('hidden');
+
+  // Konsola özet
+  console.group('🦴 3D İskelet Rehberi');
+  console.log('Cihaz:', DEVICE.type, '·', DEVICE.orientation);
+  console.log('Başarılı yüklenen:', successCount, '/', total);
+  if (failed.length) {
+    console.group('Başarısız:');
+    failed.forEach(f => console.log('  -', f.file, '→', f.error));
+    console.groupEnd();
+  }
+
+  // Eşleşmeyen mesh'leri say
+  let unmatchedCount = 0;
+  Object.values(STATE.loadedModels).forEach(g => {
+    g.traverse(o => {
+      if (o.isMesh && !o.userData.boneKey) unmatchedCount++;
+    });
+  });
+  console.log('Eşleşmeyen mesh (bölge seviyesinde kalır):', unmatchedCount);
+  console.groupEnd();
+
+  // Hoş geldin mesajı
+  setTimeout(() => {
+    if (successCount > 0) {
+      showToast('İpucu: Bir bölgeye tıkla, kemikleri keşfet', '💡', 4000);
+    }
+  }, 1000);
+}
+
+/** Hiçbir model yüklenemediyse hata banner'ı göster */
+function showErrorBanner(failed) {
+  const banner = $('#errorBanner');
+  const text = $('#errorBannerText');
+  if (!banner) return;
+
+  if (text && failed && failed.length) {
+    const first = failed[0];
+    text.innerHTML = `<b>${escapeHtml(first.file)}</b> yüklenemedi.<br><span style="font-size:12px;color:var(--txt-faint)">${escapeHtml(first.error)}</span>`;
+  }
+  banner.classList.add('show');
+
+  // Demo iskelet göster
+  buildDemoSkeleton();
+  const demoBadge = $('#demoBadge');
+  if (demoBadge) demoBadge.classList.add('show');
+}
+
+/* ============================================================================
+   BÖLÜM M · DEMO İSKELET (GLB yoksa)
+   ============================================================================ */
+function buildDemoSkeleton() {
+  const group = new THREE.Group();
+
+  const baseMat = new THREE.MeshStandardMaterial({
+    color: 0xd6dee8,
+    roughness: 0.65,
+    metalness: 0.1
+  });
+
+  function add(geo, color, pos, scale, regionId, name) {
+    const mat = baseMat.clone();
+    mat.color = new THREE.Color(color);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
+    mesh.userData.isBoneMesh = true;
+    mesh.userData.regionId = regionId;
+    mesh.userData.originalName = name;
+    mesh.name = name;
+    group.add(mesh);
+    return mesh;
+  }
+
+  // Kafatası
+  add(new THREE.SphereGeometry(0.28, 24, 20), '#ff6b6b', [0, 1.35, 0], null, 'head', 'Skull');
+
+  // Omurga
+  for (let i = 0; i < 10; i++) {
+    add(new THREE.BoxGeometry(0.11, 0.07, 0.11), '#a29bfe',
+        [0, 0.95 - i * 0.13, -0.05], null, 'spine', 'Vertebra_' + (i + 1));
+  }
+
+  // Göğüs
+  for (let i = 0; i < 6; i++) {
+    add(new THREE.TorusGeometry(0.32 - i * 0.02, 0.018, 8, 24), '#ff9ff3',
+        [0, 0.55 - i * 0.1, 0], [1, 1, 1], 'thorax', 'Rib_' + (i + 1));
+  }
+
+  // Kollar
+  for (const s of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 10), '#00d2d3',
+        [s * 0.42, 0.55, 0], null, 'upperLimb', 'Arm_' + (s > 0 ? 'R' : 'L'));
+  }
+
+  // Pelvis
+  add(new THREE.TorusGeometry(0.26, 0.045, 10, 20), '#ff6348',
+      [0, -0.2, 0], [1, 1, 1], 'lowerLimb', 'Pelvis');
+
+  // Bacaklar
+  for (const s of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.05, 0.05, 0.75, 10), '#10ac84',
+        [s * 0.15, -0.65, 0], null, 'lowerLimb', 'Leg_' + (s > 0 ? 'R' : 'L'));
+    add(new THREE.BoxGeometry(0.13, 0.07, 0.28), '#f368e0',
+        [s * 0.15, -1.15, 0.08], null, 'lowerLimb', 'Foot_' + (s > 0 ? 'R' : 'L'));
+  }
+
+  STATE.scene.add(group);
+  STATE.loadedModels['demo'] = group;
+  STATE.demoMode = true;
+
+  STATE.camera.position.set(0, 0.2, 3.6);
+  STATE.controls.target.set(0, 0.1, 0);
+  STATE.controls.update();
+}
+
+/* ============================================================================
+   BÖLÜM N · KAMERA ÇERÇEVELEME
+   ============================================================================ */
+function frameAll() {
+  const box = new THREE.Box3();
+
+  Object.values(STATE.loadedModels).forEach(g => {
+    box.expandByObject(g);
+  });
+
+  if (box.isEmpty()) return;
+
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  const fov = STATE.camera.fov * (Math.PI / 180);
+  const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.4;
+
+  STATE.camera.position.set(center.x, center.y + 0.05, center.z + dist);
+  STATE.camera.near = dist / 100;
+  STATE.camera.far = dist * 100;
+  STATE.camera.updateProjectionMatrix();
+  STATE.controls.target.copy(center);
+  STATE.controls.update();
+}
+
+/** Belirli bir bölgeye kamera odakla */
+function focusRegion(regionId) {
+  const group = STATE.loadedModels[regionId];
+  if (!group) {
+    showToast('Bu bölge yüklenmemiş', '⚠️');
+    return;
+  }
+
+  const box = new THREE.Box3().setFromObject(group);
+  if (box.isEmpty()) return;
+
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  const fov = STATE.camera.fov * (Math.PI / 180);
+  const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
+
+  const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(STATE.camera.quaternion).normalize();
+  const targetPos = center.clone().add(dir.multiplyScalar(Math.max(dist, 0.8)));
+
+  animateCamera(targetPos, center, 700);
+}
+
+/** Belirli bir kemiğe kamera odakla */
+function focusBone(boneKey) {
+  const found = [];
+  Object.values(STATE.loadedModels).forEach(g => {
+    g.traverse(o => {
+      if (o.isMesh && o.userData.boneKey === boneKey) found.push(o);
+    });
+  });
+
+  if (!found.length) {
+    showToast('Bu kemik 3D modelde ayrı değil', 'ℹ️', 3000);
+    return;
+  }
+
+  const box = new THREE.Box3();
+  found.forEach(m => box.expandByObject(m));
+  if (box.isEmpty()) return;
+
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  const fov = STATE.camera.fov * (Math.PI / 180);
+  const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.8;
+
+  const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(STATE.camera.quaternion).normalize();
+  const targetPos = center.clone().add(dir.multiplyScalar(Math.max(dist, 0.5)));
+
+  animateCamera(targetPos, center, 700);
+}
+
+/* ============================================================================
+   BÖLÜM O · RAYCAST & SEÇİM
+   ============================================================================ */
+function pickMesh(clientX, clientY) {
+  if (!STATE.renderer) return null;
+
+  const rect = STATE.renderer.domElement.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+  STATE.mouse.set(x, y);
+  STATE.raycaster.setFromCamera(STATE.mouse, STATE.camera);
+
+  const meshes = [];
+  Object.values(STATE.loadedModels).forEach(g => {
+    g.traverse(o => {
+      if (o.isMesh && o.visible) meshes.push(o);
+    });
+  });
+
+  if (!meshes.length) return null;
+
+  const hits = STATE.raycaster.intersectObjects(meshes, false);
+  return hits.length ? hits[0].object : null;
+}
+
+function highlightMesh(mesh, mode) {
+  if (!mesh || !mesh.material) return;
+
+  const apply = (mat) => {
+    const c = mat.clone();
+    if (mode === 'select') {
+      c.emissive = new THREE.Color('#ff5a5f');
+      c.emissiveIntensity = 0.55;
+      if (c.color) c.color.lerp(new THREE.Color('#ff5a5f'), 0.35);
+    } else {
+      c.emissive = new THREE.Color('#38bdf8');
+      c.emissiveIntensity = 0.35;
+      if (c.color) c.color.lerp(new THREE.Color('#38bdf8'), 0.18);
+    }
+    return c;
+  };
+
+  if (Array.isArray(mesh.material)) {
+    mesh.material = mesh.material.map(apply);
+  } else {
+    mesh.material = apply(mesh.material);
+  }
+}
+
+function restoreMaterial(mesh) {
+  if (!mesh) return;
+  const orig = STATE.originalMaterials.get(mesh);
+  if (!orig) return;
+
+  if (Array.isArray(orig)) {
+    mesh.material = orig.map(m => m.clone());
+  } else {
+    mesh.material = orig.clone();
+  }
+}
+
+/* ============================================================================
+   BÖLÜM P · POINTER OLAYLARI
+   ============================================================================ */
+function onPointerMove(e) {
+  // Dokunmatikte hover yok
+  if (DEVICE.isTouch) return;
+  if (!STATE.modelsReady) return;
+
+  const mesh = pickMesh(e.clientX, e.clientY);
+
+  if (mesh !== STATE.hoveredMesh) {
+    if (STATE.hoveredMesh && STATE.hoveredMesh !== STATE.selectedMesh) {
+      restoreMaterial(STATE.hoveredMesh);
+    }
+    STATE.hoveredMesh = mesh;
+
+    if (mesh && mesh !== STATE.selectedMesh) {
+      highlightMesh(mesh, 'hover');
+    }
+
+    const tip = $('#tooltip');
+    if (!tip) return;
+
+    if (mesh) {
+      const boneKey = mesh.userData.boneKey;
+      const regionId = mesh.userData.regionId;
+
+      let txt = '';
+      let lat = '';
+
+      if (boneKey) {
+        const b = findBoneByKey(boneKey);
+        if (b) { txt = b.turkish; lat = b.latin; }
+      } else if (regionId && MAIN_REGIONS[regionId]) {
+        txt = MAIN_REGIONS[regionId].name;
+        lat = MAIN_REGIONS[regionId].totalBones + ' kemik';
+      } else {
+        txt = mesh.name || 'Mesh';
+      }
+
+      tip.innerHTML = escapeHtml(txt) + (lat ? '<div class="lat">' + escapeHtml(lat) + '</div>' : '');
+      tip.classList.add('show');
+    } else {
+      tip.classList.remove('show');
+    }
+  }
+
+  // Konumlandır
+  const tip = $('#tooltip');
+  if (tip && tip.classList.contains('show')) {
+    const vp = $('#viewport').getBoundingClientRect();
+    let x = e.clientX - vp.left + 14;
+    let y = e.clientY - vp.top + 14;
+
+    if (x + tip.offsetWidth > vp.width - 8) {
+      x = e.clientX - vp.left - tip.offsetWidth - 14;
+    }
+    if (y + tip.offsetHeight > vp.height - 8) {
+      y = e.clientY - vp.top - tip.offsetHeight - 14;
+    }
+
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  }
+}
+
+function selectMesh(mesh) {
+  // Eski seçimi temizle
+  if (STATE.selectedMesh && STATE.selectedMesh !== mesh) {
+    restoreMaterial(STATE.selectedMesh);
+  }
+
+  STATE.selectedMesh = mesh;
+  highlightMesh(mesh, 'select');
+
+  const boneKey = mesh.userData.boneKey;
+  const regionId = mesh.userData.regionId;
+
+  // Öncelik: bone > region
+  if (boneKey) {
+    const bone = findBoneByKey(boneKey);
+    if (bone) {
+      renderBoneCard(bone, regionId);
+      updateBadgeSel(bone.turkish);
+      return;
+    }
+  }
+
+  if (regionId && MAIN_REGIONS[regionId]) {
+    const region = MAIN_REGIONS[regionId];
+    renderRegionCard(regionId);
+    updateBadgeSel(region.name);
+    return;
+  }
+
+  // Bilinmeyen mesh
+  renderUnknownCard(mesh);
+  updateBadgeSel(mesh.name || 'bilinmeyen');
+}
+
+function clearSelection() {
+  if (STATE.selectedMesh) {
+    restoreMaterial(STATE.selectedMesh);
+    STATE.selectedMesh = null;
+  }
+  STATE.currentRegion = null;
+  STATE.currentSubRegion = null;
+  updateBadgeSel('yok');
+  renderEmptyCard();
+}
+
+function updateBadgeSel(text) {
+  const el = $('#badgeSel');
+  if (el) el.textContent = text || 'yok';
+}
+
+/* ============================================================================
+   BÖLÜM Q · KART RENDER — BOŞ DURUM
+   ============================================================================ */
+function renderEmptyCard() {
+  const card = $('#infoCard');
+  if (!card) return;
+
+  card.classList.add('empty');
+  card.innerHTML = `
+    <div class="emptyState">
+      <div class="big" aria-hidden="true">🦴</div>
+      <h3>Bir bölgeye tıkla</h3>
+      <p>3D iskelet üzerindeki <b>kafatası, omurga, göğüs, kol veya bacak</b> bölgesine tıkla. O bölgedeki tüm kemikleri liste halinde göreceksin.</p>
+    </div>
+  `;
+}
+
+/* ============================================================================
+   BÖLÜM R · KART RENDER — BÖLGE
+   ============================================================================ */
+function renderRegionCard(regionId, subRegionId) {
+  const region = MAIN_REGIONS[regionId];
+  const card = $('#infoCard');
+  if (!region || !card) return;
+
+  STATE.currentRegion = regionId;
+
+  // Aktif alt bölge
+  const activeSub = subRegionId
+    || STATE.currentSubRegion
+    || region.subRegions[0];
+  STATE.currentSubRegion = activeSub;
+
+  // Alt sekme butonları
+  const subTabs = region.subRegions.map(sr => {
+    const sub = SUB_REGIONS[sr];
+    if (!sub) return '';
+    const count = BONE_DATA
+      .filter(b => b.region === sr)
+      .reduce((s, b) => s + (isNaN(parseInt(b.count)) ? 1 : parseInt(b.count)), 0);
+    const isActive = sr === activeSub ? ' active' : '';
+    return `
+      <button class="subTab${isActive}" data-sub="${sr}" type="button" style="--sub-color:${sub.color}">
+        <span class="dot"></span>${escapeHtml(sub.name)}<span class="n">${count}</span>
+      </button>
+    `;
+  }).join('');
+
+  // Aktif alt bölgenin kemik listesi
+  const bones = BONE_DATA.filter(b => b.region === activeSub);
+  const boneRows = bones.map(b => `
+    <div class="boneRow" data-key="${b.key}" role="button" tabindex="0">
+      <div class="ico" aria-hidden="true">${b.icon || '🦴'}</div>
+      <div class="info">
+        <div class="tr">${escapeHtml(b.turkish)}</div>
+        <div class="lat">${escapeHtml(b.latin)}</div>
+      </div>
+      <div class="cnt">${escapeHtml(b.count)}</div>
+      <div class="arrow" aria-hidden="true">›</div>
+    </div>
+  `).join('');
+
+  card.classList.remove('empty');
+  card.innerHTML = `
+    <div class="regionHero" style="--region-color:${region.color}">
+      <span class="icon" aria-hidden="true">${region.icon}</span>
+      <h2>${escapeHtml(region.name)}</h2>
+      <div class="lat">${escapeHtml(region.latin)}</div>
+      <span class="cnt">📊 ${region.totalBones} Kemik</span>
+    </div>
+    <div class="regionDesc">${escapeHtml(region.description)}</div>
+    <div class="subTabs" role="tablist">${subTabs}</div>
+    <div class="boneList">${boneRows || '<div style="padding:20px;text-align:center;color:var(--txt-muted);font-size:13px">Bu alt bölgede kemik yok</div>'}</div>
+    <div class="cardActions">
+      <button class="primary" type="button" data-action="focus-region" data-region="${regionId}">
+        🎯 Bölgeye Odaklan
+      </button>
+      <button type="button" data-action="clear">✕ Kapat</button>
+    </div>
+  `;
+
+  bindRegionCardEvents(regionId);
+}
+
+function bindRegionCardEvents(regionId) {
+  // Alt sekme tıklama
+  $$('.subTab').forEach(el => {
+    el.addEventListener('click', () => {
+      renderRegionCard(regionId, el.dataset.sub);
+    });
+  });
+
+  // Kemik satırı tıklama
+  $$('.boneRow').forEach(el => {
+    el.addEventListener('click', () => {
+      const b = findBoneByKey(el.dataset.key);
+      if (b) renderBoneCard(b, regionId);
+    });
+    el.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        el.click();
+      }
+    });
+  });
+
+  // Aksiyon butonları
+  $$('.cardActions button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      if (action === 'focus-region') {
+        focusRegion(regionId);
+      } else if (action === 'clear') {
+        clearSelection();
+      }
+    });
+  });
+}
+
+/* ============================================================================
+   BÖLÜM S · KART RENDER — KEMİK DETAY
+   ============================================================================ */
+function renderBoneCard(bone, parentRegionId) {
+  if (!bone) return;
+  const card = $('#infoCard');
+  if (!card) return;
+
+  const sub = SUB_REGIONS[bone.region] || { name: 'Bilinmeyen', color: '#94a3b8', icon: '❔' };
+  const parentRegion = parentRegionId || findParentRegion(bone.region);
+
+  card.classList.remove('empty');
+  card.innerHTML = `
+    <div class="detailHero" style="--region-color:${sub.color}">
+      <div class="backBtn" id="backToRegion" role="button" tabindex="0">
+        ← ${parentRegion ? escapeHtml(MAIN_REGIONS[parentRegion].name) : 'Geri'}
+      </div>
+      <span class="region">${sub.icon} ${escapeHtml(sub.name)}</span>
+      <h2>${escapeHtml(bone.turkish)}</h2>
+      <div class="lat">${escapeHtml(bone.latin)}</div>
+      <div class="meta">
+        <span>🔢 ${escapeHtml(bone.count)} adet</span>
+      </div>
+    </div>
+
+    <div class="boneImage" id="boneImage" style="display:none">
+      <img id="boneImageEl" alt="${escapeHtml(bone.turkish)}" />
+      <div class="cap">${escapeHtml(bone.turkish)} — ${escapeHtml(bone.latin)}</div>
+    </div>
+
+    <div class="imgPlaceholder" id="imgPlaceholder">
+      <div class="ph-icon" aria-hidden="true">🖼️</div>
+      <div style="margin-bottom:6px">Bu kemik için görsel bulunamadı</div>
+      <div>PDF'ten kırp ve şuraya koy:</div>
+      <div style="margin-top:8px"><code>images/${escapeHtml(bone.key)}.png</code></div>
+    </div>
+
+    <div class="detailBody">
+      <div class="section">
+        <div class="sectionTitle"><span class="dot"></span>Ne İşe Yarar?</div>
+        <div class="sectionText">${escapeHtml(bone.func)}</div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle"><span class="dot blue"></span>Günlük Hayatta</div>
+        <div class="sectionText">${escapeHtml(bone.daily)}</div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle"><span class="dot yellow"></span>Klinik İpucu</div>
+        <div class="clinical">${escapeHtml(bone.clinical)}</div>
+      </div>
+    </div>
+
+    <div class="cardActions">
+      <button class="primary" type="button" data-action="focus-bone" data-key="${bone.key}">
+        🎯 3D'de Odakla
+      </button>
+      <button type="button" id="backToRegion2">← Bölgeye Dön</button>
+    </div>
+  `;
+
+  // Görsel yükleme
+  const img = $('#boneImageEl');
+  const imgWrap = $('#boneImage');
+  const placeholder = $('#imgPlaceholder');
+
+  let triedJpg = false;
+  let triedPng = false;
+
+  img.addEventListener('load', () => {
+    imgWrap.style.display = 'block';
+    placeholder.classList.remove('show');
+  });
+
+  img.addEventListener('error', () => {
+    if (!triedJpg) {
+      // PNG yüklenemedi, JPG dene
+      triedJpg = true;
+      img.src = `images/${bone.key}.jpg`;
+      return;
+    }
+    if (!triedPng) {
+      // JPG de yüklenemedi, WEBP dene
+      triedPng = true;
+      img.src = `images/${bone.key}.webp`;
+      return;
+    }
+    // Hiçbiri yüklenemedi
+    imgWrap.style.display = 'none';
+    placeholder.classList.add('show');
+  });
+
+  // PNG ile başla
+  img.src = `images/${bone.key}.png`;
+
+  // Placeholder'ı başta gizle, yükleme başarılı olunca tekrar gizle
+  placeholder.classList.remove('show');
+  imgWrap.style.display = 'none';
+
+  // Geri butonları
+  const backFn = () => {
+    if (parentRegion) renderRegionCard(parentRegion);
+    else renderEmptyCard();
+  };
+
+  const back1 = $('#backToRegion');
+  const back2 = $('#backToRegion2');
+  if (back1) {
+    back1.addEventListener('click', backFn);
+    back1.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        backFn();
+      }
+    });
+  }
+  if (back2) back2.addEventListener('click', backFn);
+
+  // Odakla butonu
+  const focusBtn = card.querySelector('[data-action="focus-bone"]');
+  if (focusBtn) {
+    focusBtn.addEventListener('click', () => {
+      focusBone(bone.key);
+      // 3D'de mesh bulup seç
+      let targetMesh = null;
+      Object.values(STATE.loadedModels).forEach(g => {
+        g.traverse(o => {
+          if (!targetMesh && o.isMesh && o.userData.boneKey === bone.key) {
+            targetMesh = o;
+          }
+        });
+      });
+      if (targetMesh) {
+        if (STATE.selectedMesh && STATE.selectedMesh !== targetMesh) {
+          restoreMaterial(STATE.selectedMesh);
+        }
+        STATE.selectedMesh = targetMesh;
+        highlightMesh(targetMesh, 'select');
+      }
+    });
+  }
+
+  updateBadgeSel(bone.turkish);
+
+  // Panel gövdesini yukarı kaydır
+  const panelBody = $('#panelBody');
+  if (panelBody) panelBody.scrollTop = 0;
+}
+
+/* ============================================================================
+   BÖLÜM T · BİLİNMEYEN MESH KARTI
+   ============================================================================ */
+function renderUnknownCard(mesh) {
+  const card = $('#infoCard');
+  if (!card) return;
+
+  const meshName = mesh.name || 'isimsiz';
+
+  card.classList.remove('empty');
+  card.innerHTML = `
+    <div class="detailHero" style="--region-color:#94a3b8">
+      <span class="region">❔ Tanımsız Mesh</span>
+      <h2>${escapeHtml(meshName)}</h2>
+      <div class="lat">Bu mesh rehberdeki bir kemiğe eşleşmedi</div>
+    </div>
+    <div class="detailBody">
+      <div class="section">
+        <div class="sectionTitle"><span class="dot"></span>Bilgi</div>
+        <div class="sectionText">
+          Bu mesh, rehberdeki bölge veya kemik isimleriyle eşleşmedi. Sorun değil — modeldeki bu parça
+          <b>bölge seviyesinde</b> görüntülenir. Detaylı eşleştirme için GLB içindeki mesh isimlerini
+          <code>kafatasi.glb</code> gibi bölge isimleriyle veya <code>femur</code> gibi kemik anahtarlarıyla adlandırabilirsin.
+        </div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle"><span class="dot blue"></span>Mesh Adı</div>
+        <div class="sectionText" style="font-family:var(--font-mono);font-size:12px;background:var(--panel-3);padding:10px;border-radius:8px">
+          ${escapeHtml(meshName)}
+        </div>
+      </div>
+    </div>
+    <div class="cardActions">
+      <button type="button" data-action="clear">✕ Kapat</button>
+    </div>
+  `;
+
+  const clearBtn = card.querySelector('[data-action="clear"]');
+  if (clearBtn) clearBtn.addEventListener('click', clearSelection);
+}
+
+/* ============================================================================
+   BÖLÜM U · ARAMA
+   ============================================================================ */
+function setupSearch() {
+  const input = $('#search');
+  const sug = $('#suggest');
+  const clearBtn = $('#searchClear');
+  if (!input || !sug) return;
+
+  let activeIdx = -1;
+
+  function closeSug() {
+    sug.classList.remove('open');
+    activeIdx = -1;
+  }
+
+  function doSearch(q) {
+    const n = normalize(q);
+    if (!n) return { regions: [], bones: [] };
+
+    const regions = Object.entries(MAIN_REGIONS)
+      .filter(([id, r]) => {
+        const hay = normalize(r.name) + '|' + normalize(r.latin);
+        return hay.includes(n);
+      })
+      .map(([id, r]) => ({ id, ...r }));
+
+    const bones = BONE_DATA
+      .filter(b => {
+        const hay = normalize(b.turkish) + '|' + normalize(b.latin) + '|' + normalize(b.key);
+        return hay.includes(n);
+      })
+      .slice(0, 12);
+
+    return { regions, bones };
+  }
+
+  function renderSuggestions(results) {
+    const { regions, bones } = results;
+
+    if (!regions.length && !bones.length) {
+      sug.innerHTML = '<div class="empty">Sonuç bulunamadı</div>';
+      sug.classList.add('open');
+      return;
+    }
+
+    let html = '';
+
+    regions.forEach(r => {
+      html += `
+        <div class="item" data-type="region" data-id="${r.id}" role="option">
+          <span class="dot" style="background:${r.color}"></span>
+          <div class="info">
+            <div class="tr">${r.icon} ${escapeHtml(r.name)}</div>
+            <div class="lat">${escapeHtml(r.latin)}</div>
+          </div>
+          <span class="tag">Bölge</span>
+        </div>
+      `;
+    });
+
+    bones.forEach(b => {
+      const sub = SUB_REGIONS[b.region];
+      html += `
+        <div class="item" data-type="bone" data-key="${b.key}" role="option">
+          <span class="dot" style="background:${sub ? sub.color : '#94a3b8'}"></span>
+          <div class="info">
+            <div class="tr">${escapeHtml(b.turkish)}</div>
+            <div class="lat">${escapeHtml(b.latin)}</div>
+          </div>
+          <span class="tag">Kemik</span>
+        </div>
+      `;
+    });
+
+    sug.innerHTML = html;
+    sug.classList.add('open');
+
+    $$('.item', sug).forEach(el => {
+      el.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        handleSuggestionClick(el);
+      });
+      el.addEventListener('touchend', (ev) => {
+        ev.preventDefault();
+        handleSuggestionClick(el);
+      });
+    });
+  }
+
+  function handleSuggestionClick(el) {
+    const type = el.dataset.type;
+    if (type === 'region') {
+      const regionId = el.dataset.id;
+      renderRegionCard(regionId);
+      focusRegion(regionId);
+      switchTab('info');
+    } else {
+      const key = el.dataset.key;
+      const bone = findBoneByKey(key);
+      if (bone) {
+        renderBoneCard(bone);
+        focusBone(key);
+        switchTab('info');
+      }
+    }
+    closeSug();
+    input.value = '';
+    updateClearBtn();
+  }
+
+  function updateClearBtn() {
+    if (!clearBtn) return;
+    if (input.value.trim()) clearBtn.classList.add('show');
+    else clearBtn.classList.remove('show');
+  }
+
+  input.addEventListener('input', () => {
+    renderSuggestions(doSearch(input.value));
+    activeIdx = -1;
+    updateClearBtn();
+  });
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim()) {
+      renderSuggestions(doSearch(input.value));
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const items = $$('.item', sug);
+
+    if (e.key === 'ArrowDown' && items.length) {
+      e.preventDefault();
+      activeIdx = Math.min(items.length - 1, activeIdx + 1);
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+    } else if (e.key === 'ArrowUp' && items.length) {
+      e.preventDefault();
+      activeIdx = Math.max(0, activeIdx - 1);
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const target = activeIdx >= 0 ? items[activeIdx] : items[0];
+      if (target) handleSuggestionClick(target);
+    } else if (e.key === 'Escape') {
+      closeSug();
+      input.blur();
+    }
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      input.focus();
+      closeSug();
+      updateClearBtn();
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#searchWrap')) closeSug();
+  });
+}
+
+/* ============================================================================
+   BÖLÜM V · LİSTE SEKMESİ
+   ============================================================================ */
+function renderBoneList(filter) {
+  const container = $('#boneList');
+  if (!container) return;
+
+  const n = normalize(filter || '');
+  let html = '';
+
+  for (const [rid, region] of Object.entries(MAIN_REGIONS)) {
+    const allBones = [];
+    for (const sr of region.subRegions) {
+      BONE_DATA.filter(b => b.region === sr).forEach(b => allBones.push(b));
+    }
+
+    const filtered = n
+      ? allBones.filter(b =>
+          normalize(b.turkish).includes(n)
+          || normalize(b.latin).includes(n)
+          || normalize(b.key).includes(n))
+      : allBones;
+
+    if (!filtered.length) continue;
+
+    const isOpen = n ? 'open' : '';
+
+    html += `
+      <details class="regionGroup" ${isOpen}>
+        <summary>
+          <span class="rDot" style="background:${region.color}"></span>
+          ${region.icon} ${escapeHtml(region.name)}
+          <span class="rCount">${region.totalBones} kemik</span>
+          <span class="arrow" aria-hidden="true">▶</span>
+        </summary>
+        <div class="items">
+          ${filtered.map(b => {
+            const sub = SUB_REGIONS[b.region];
+            return `
+              <div class="boneItem" data-key="${b.key}">
+                <span class="bullet" style="background:${sub ? sub.color : '#94a3b8'}"></span>
+                <span class="tr">${escapeHtml(b.turkish)}</span>
+                <span class="lat">${escapeHtml(b.latin)}</span>
+                <span class="cnt">${escapeHtml(b.count)}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </details>
+    `;
+  }
+
+  if (!html) {
+    html = `
+      <div class="emptyState">
+        <div class="big" aria-hidden="true">🔍</div>
+        <h3>Sonuç bulunamadı</h3>
+        <p>“${escapeHtml(filter || '')}” için eşleşen kemik yok.</p>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+
+  $$('.boneItem', container).forEach(el => {
+    el.addEventListener('click', () => {
+      const b = findBoneByKey(el.dataset.key);
+      if (b) {
+        renderBoneCard(b);
+        focusBone(b.key);
+        switchTab('info');
+      }
+    });
+  });
+}
+
+/* ============================================================================
+   BÖLÜM W · İSTATİSTİK SEKMESİ
+   ============================================================================ */
+function renderStats() {
+  const bar = $('#regionBar');
+  const legend = $('#regionLegend');
+  if (!bar || !legend) return;
+
+  let barHtml = '';
+  let legendHtml = '';
+
+  const regions = Object.values(MAIN_REGIONS);
+  const total = regions.reduce((s, r) => s + r.totalBones, 0);
+
+  regions.forEach(r => {
+    const pct = (r.totalBones / total) * 100;
+    barHtml += `<div class="seg" style="flex:${r.totalBones};background:${r.color}" title="${escapeHtml(r.name)}: ${r.totalBones}"></div>`;
+    legendHtml += `
+      <div class="li">
+        <span class="dot" style="background:${r.color}"></span>
+        <span class="name">${r.icon} ${escapeHtml(r.name)}</span>
+        <b>${r.totalBones}</b>
+      </div>
+    `;
+  });
+
+  bar.innerHTML = barHtml;
+  legend.innerHTML = legendHtml;
+}
+
+/* ============================================================================
+   BÖLÜM X · SEKME YÖNETİMİ
+   ============================================================================ */
+function switchTab(name) {
+  $$('.tab').forEach(t => {
+    const isActive = t.dataset.tab === name;
+    t.classList.toggle('active', isActive);
+    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  $$('.pane').forEach(p => {
+    p.classList.toggle('active', p.dataset.pane === name);
+  });
+}
+
+/* ============================================================================
+   BÖLÜM Y · ARAÇ ÇUBUĞU
+   ============================================================================ */
+function setupToolbar() {
+  // Sıfırla
+  const btnReset = $('#btnReset');
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      frameAll();
+      showToast('Kamera sıfırlandı', '⟲', 1400);
+    });
+  }
+
+  // Otomatik döndür
+  const btnAuto = $('#btnAuto');
+  if (btnAuto) {
+    btnAuto.addEventListener('click', () => {
+      STATE.autoRotate = !STATE.autoRotate;
+      btnAuto.classList.toggle('on', STATE.autoRotate);
+    });
+  }
+
+  // Tel kafes
+  const btnWire = $('#btnWire');
+  if (btnWire) {
+    btnWire.addEventListener('click', () => {
+      STATE.wireframe = !STATE.wireframe;
+      btnWire.classList.toggle('on', STATE.wireframe);
+
+      Object.values(STATE.loadedModels).forEach(g => {
+        g.traverse(o => {
+          if (o.isMesh) {
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            mats.forEach(m => { m.wireframe = STATE.wireframe; });
+          }
+        });
+      });
+    });
+  }
+
+  // Tam ekran
+  const btnFull = $('#btnFull');
+  if (btnFull) {
+    btnFull.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+  }
+
+  // Tema
+  const btnTheme = $('#btnTheme');
+  if (btnTheme) {
+    btnTheme.addEventListener('click', () => {
+      STATE.theme = STATE.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', STATE.theme);
+      const ico = btnTheme.querySelector('.ico');
+      if (ico) ico.textContent = STATE.theme === 'dark' ? '☾' : '☀';
+
+      // localStorage'a kaydet
+      try { localStorage.setItem('skeleton-theme', STATE.theme); } catch (e) {}
+    });
+  }
+
+  // Yardım
+  const btnHelp = $('#btnHelp');
+  const helpModal = $('#helpModal');
+  const btnCloseHelp = $('#btnCloseHelp');
+
+  if (btnHelp && helpModal) {
+    btnHelp.addEventListener('click', () => helpModal.classList.add('open'));
+  }
+  if (btnCloseHelp && helpModal) {
+    btnCloseHelp.addEventListener('click', () => helpModal.classList.remove('open'));
+  }
+  if (helpModal) {
+    helpModal.addEventListener('click', (e) => {
+      if (e.target === helpModal) helpModal.classList.remove('open');
+    });
+  }
+}
+
+/* ============================================================================
+   BÖLÜM Z · KLAVYE KISAYOLLARI (Yalnızca masaüstü)
+   ============================================================================ */
+function setupKeyboard() {
+  if (DEVICE.isTouch) return;
+
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+    if (e.key === 'Escape') {
+      const helpModal = $('#helpModal');
+      if (helpModal) helpModal.classList.remove('open');
+      clearSelection();
+      return;
+    }
+
+    const k = e.key.toLowerCase();
+
+    if (k === 'r') {
+      frameAll();
+      showToast('Kamera sıfırlandı', '⟲', 1400);
+    } else if (k === 'a') {
+      const btn = $('#btnAuto');
+      if (btn) btn.click();
+    } else if (k === 'w') {
+      const btn = $('#btnWire');
+      if (btn) btn.click();
+    } else if (k === 'f') {
+      const btn = $('#btnFull');
+      if (btn) btn.click();
+    } else if (k === 't') {
+      const btn = $('#btnTheme');
+      if (btn) btn.click();
+    } else if (k === '/') {
+      e.preventDefault();
+      const input = $('#search');
+      if (input) input.focus();
+    }
+  });
+}
+
+/* ============================================================================
+   BÖLÜM AA · POINTER OLAYLARI BAĞLA
+   ============================================================================ */
+function setupPointerEvents() {
+  const canvas = STATE.renderer.domElement;
+
+  // Hover
+  canvas.addEventListener('pointermove', onPointerMove);
+
+  // Tıklama / dokunma
+  canvas.addEventListener('pointerdown', (event) => {
+    STATE._dragging = false;
+    STATE._pointerDownTime = performance.now();
+    STATE._pointerDownX = event.clientX;
+    STATE._pointerDownY = event.clientY;
+  });
+
+  canvas.addEventListener('pointermove', (event) => {
+    if (!STATE._pointerDownTime) return;
+    const dx = event.clientX - STATE._pointerDownX;
+    const dy = event.clientY - STATE._pointerDownY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      STATE._dragging = true;
+    }
+  });
+
+  canvas.addEventListener('pointerup', (event) => {
+    const dt = performance.now() - STATE._pointerDownTime;
+    STATE._pointerDownTime = 0;
+
+    if (STATE._dragging) return;
+    if (dt > 500) return; // uzun basış = iptal
+    if (!STATE.modelsReady) return;
+
+    // Tıklama sayılır
+    const mesh = pickMesh(event.clientX, event.clientY);
+    if (mesh) {
+      selectMesh(mesh);
+    } else {
+      clearSelection();
+    }
+  });
+
+  canvas.addEventListener('pointercancel', () => {
+    STATE._dragging = false;
+    STATE._pointerDownTime = 0;
+  });
+}
+
+/* ============================================================================
+   BÖLÜM BB · BAŞLANGIÇ AYARLARI (tema, sekmeler)
+   ============================================================================ */
+function setupUI() {
+  // Tema — localStorage'dan oku
+  let savedTheme = 'dark';
+  try { savedTheme = localStorage.getItem('skeleton-theme') || 'dark'; } catch (e) {}
+  STATE.theme = savedTheme;
+  document.documentElement.setAttribute('data-theme', savedTheme);
+
+  const themeIco = $('#btnTheme .ico');
+  if (themeIco) themeIco.textContent = savedTheme === 'dark' ? '☾' : '☀';
+
+  // Sekmeler
+  $$('.tab').forEach(t => {
+    t.addEventListener('click', () => switchTab(t.dataset.tab));
+  });
+
+  // Liste arama
+  const listSearch = $('#listSearch');
+  if (listSearch) {
+    listSearch.addEventListener('input', (e) => renderBoneList(e.target.value));
+  }
+}
+
+/* ============================================================================
+   BÖLÜM CC · GLOBAL YARDIMCILAR (inline onclick için)
+   ============================================================================ */
+window.__focusBone = focusBone;
+window.__focusRegion = focusRegion;
+window.__clearSelection = clearSelection;
+
+/* ============================================================================
+   BÖLÜM DD · BAŞLAT
+   ============================================================================ */
+async function boot() {
+  console.log('🦴 3D İskelet Rehberi başlatılıyor…');
+  console.log('Cihaz:', DEVICE);
+
+  // 1. UI ayarları
+  setupUI();
+
+  // 2. Three.js sahnesi
+  try {
+    initThree();
+  } catch (e) {
+    console.error('Three.js başlatılamadı:', e);
+    const loadText = $('#loadText');
+    if (loadText) loadText.textContent = 'WebGL desteklenmiyor';
+    const loadSub = $('#loadSub');
+    if (loadSub) loadSub.textContent = 'Tarayıcın 3D grafik desteklemiyor olabilir.';
+    return;
+  }
+
+  // 3. UI etkileşimleri
+  setupSearch();
+  setupToolbar();
+  setupKeyboard();
+  setupPointerEvents();
+
+  // 4. İçerik ön render
+  renderBoneList();
+  renderStats();
+  renderEmptyCard();
+
+  // 5. Modelleri yükle
+  try {
+    await loadAllModels();
+  } catch (e) {
+    console.error('Model yükleme hatası:', e);
+    const loadText = $('#loadText');
+    if (loadText) loadText.textContent = 'Modeller yüklenemedi';
+    const loadSub = $('#loadSub');
+    if (loadSub) loadSub.textContent = String(e.message || e);
+  }
+}
+
+/* Hata yakalama — sayfa çökmesin */
+window.addEventListener('error', (e) => {
+  console.error('Global hata:', e.error || e.message);
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('İşlenmeyen promise hatası:', e.reason);
+});
+
+/* Yönelim değişimini yeniden tetikle (mobil) */
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    if (typeof onResize === 'function') onResize();
+  }, 300);
+});
+
+/* Başlat */
+boot();
+/* ============================================================================
+   BÖLÜM EE · KALİBRASYON MODU (v2.0 üzerine eklenti)
+   ============================================================================
+   Meshy farklı GLB'leri farklı ölçekte ürettiği için parçalar uyumsuz çıkabilir.
+   Bu modül canlı slider'larla hizalama yapmanızı sağlar.
+   Kaydedilen değerler localStorage'da saklanır ve sayfa yenilendiğinde uygulanır.
+   ============================================================================ */
+(function setupCalibration() {
+  const CALIB_KEY = 'skeleton-layout-v2';
+
+  // Kaydedilmiş kalibrasyonu oku
+  let CALIB = {};
+  try { CALIB = JSON.parse(localStorage.getItem(CALIB_KEY) || '{}'); } catch (e) { CALIB = {}; }
+
+  // Varsayılan değerler (mevcut GLB_LAYOUT'tan alınır)
+  const DEFAULTS = {};
+  for (const rid of Object.keys(GLB_LAYOUT)) {
+    DEFAULTS[rid] = {
+      pos: GLB_LAYOUT[rid].pos.slice(),
+      rot: GLB_LAYOUT[rid].rot.slice(),
+      scale: GLB_LAYOUT[rid].scale
+    };
+  }
+
+  // Kalibrasyon değerlerini uygula
+  function applyCalibration() {
+    for (const rid of Object.keys(DEFAULTS)) {
+      const g = STATE.loadedModels[rid];
+      if (!g) continue;
+      const ov = CALIB[rid];
+      if (!ov) continue;
+      if (ov.pos) g.position.set(ov.pos[0], ov.pos[1], ov.pos[2]);
+      if (ov.rot) g.rotation.set(ov.rot[0], ov.rot[1], ov.rot[2]);
+      if (typeof ov.scale === 'number') g.scale.setScalar(ov.scale);
+    }
+  }
+
+  // Modeller hazır olunca kalibrasyonu uygula
+  function waitAndApply() {
+    if (STATE.modelsReady) {
+      applyCalibration();
+      return;
+    }
+    setTimeout(waitAndApply, 300);
+  }
+  waitAndApply();
+
+  // UI elemanları
+  const fab = document.getElementById('calibFab');
+  const panel = document.getElementById('calibPanel');
+  const tabsEl = document.getElementById('calibTabs');
+  const controlsEl = document.getElementById('calibControls');
+  if (!fab || !panel || !tabsEl || !controlsEl) return;
+
+  const NAMES = {
+    head: '💀 Kafatası',
+    spine: '🦴 Omurga',
+    thorax: '🫁 Göğüs',
+    upperLimb: '💪 Üst Kol',
+    lowerLimb: '🦵 Alt Bacak'
+  };
+
+  let activeRegion = 'head';
+
+  // Bölge sekmelerini oluştur
+  for (const [rid, name] of Object.entries(NAMES)) {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.dataset.region = rid;
+    btn.addEventListener('click', () => {
+      activeRegion = rid;
+      updateTabs();
+      renderControls();
+    });
+    tabsEl.appendChild(btn);
+  }
+
+  function updateTabs() {
+    tabsEl.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.region === activeRegion);
+    });
+  }
+
+  // Bölgenin mevcut değerlerini al (override varsa ondan, yoksa default)
+  function getVals(rid) {
+    const ov = CALIB[rid] || {};
+    const def = DEFAULTS[rid];
+    return {
+      pos: ov.pos ? ov.pos.slice() : def.pos.slice(),
+      rot: ov.rot ? ov.rot.slice() : def.rot.slice(),
+      scale: typeof ov.scale === 'number' ? ov.scale : def.scale
+    };
+  }
+
+  function sliderRow(type, idx, label, value, min, max, step) {
+    const id = `calib-${type}-${idx}`;
+    return `
+      <div class="cp-row">
+        <label for="${id}">${label}</label>
+        <input type="range" id="${id}" data-type="${type}" data-idx="${idx}"
+               min="${min}" max="${max}" step="${step}" value="${value}" />
+        <input type="number" data-type="${type}" data-idx="${idx}"
+               min="${min}" max="${max}" step="${step}"
+               value="${Number(value).toFixed(2)}" />
+      </div>`;
+  }
+
+  function renderControls() {
+    const v = getVals(activeRegion);
+
+    controlsEl.innerHTML = `
+      <div class="cp-section">
+        <div class="cp-section-title">Pozisyon (metre)</div>
+        ${sliderRow('pos', 0, 'X', v.pos[0], -3, 3, 0.01)}
+        ${sliderRow('pos', 1, 'Y', v.pos[1], -3, 3, 0.01)}
+        ${sliderRow('pos', 2, 'Z', v.pos[2], -3, 3, 0.01)}
+      </div>
+      <div class="cp-section">
+        <div class="cp-section-title">Rotasyon (radyan)</div>
+        ${sliderRow('rot', 0, 'X', v.rot[0], -3.15, 3.15, 0.01)}
+        ${sliderRow('rot', 1, 'Y', v.rot[1], -3.15, 3.15, 0.01)}
+        ${sliderRow('rot', 2, 'Z', v.rot[2], -3.15, 3.15, 0.01)}
+      </div>
+      <div class="cp-section">
+        <div class="cp-section-title">Ölçek</div>
+        ${sliderRow('scale', 0, 'S', v.scale, 0.05, 5, 0.01)}
+      </div>`;
+
+    bindSliders();
+  }
+
+  function bindSliders() {
+    controlsEl.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const type = inp.dataset.type;
+        const idx = parseInt(inp.dataset.idx, 10);
+        const val = parseFloat(inp.value);
+        if (isNaN(val)) return;
+
+        const row = inp.closest('.cp-row');
+        row.querySelectorAll('input').forEach(other => {
+          if (other !== inp) {
+            other.value = (other.type === 'number') ? val.toFixed(2) : val;
+          }
+        });
+
+        updateRegion(activeRegion, type, idx, val);
+      });
+    });
+  }
+
+  function updateRegion(rid, type, idx, val) {
+    const g = STATE.loadedModels[rid];
+    if (!g) return;
+
+    if (!CALIB[rid]) CALIB[rid] = {};
+    const ov = CALIB[rid];
+    const def = DEFAULTS[rid];
+
+    if (type === 'pos') {
+      if (!ov.pos) ov.pos = def.pos.slice();
+      ov.pos[idx] = val;
+      g.position.set(ov.pos[0], ov.pos[1], ov.pos[2]);
+    } else if (type === 'rot') {
+      if (!ov.rot) ov.rot = def.rot.slice();
+      ov.rot[idx] = val;
+      g.rotation.set(ov.rot[0], ov.rot[1], ov.rot[2]);
+    } else if (type === 'scale') {
+      ov.scale = val;
+      g.scale.setScalar(val);
+    }
+  }
+
+  // FAB tıklama
+  fab.addEventListener('click', () => panel.classList.toggle('open'));
+
+  // Kapat
+  document.getElementById('calibClose').addEventListener('click', () => {
+    panel.classList.remove('open');
+  });
+
+  // Klavye kısayolu: Ctrl+Shift+C
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      panel.classList.toggle('open');
+    }
+  });
+
+  // Kaydet
+  document.getElementById('calibSave').addEventListener('click', () => {
+    try { localStorage.setItem(CALIB_KEY, JSON.stringify(CALIB)); } catch (e) {}
+    fab.textContent = '✓';
+    fab.classList.add('on');
+    setTimeout(() => { fab.textContent = '⚙'; fab.classList.remove('on'); }, 1500);
+    showToast('Kalibrasyon kaydedildi', '💾', 1800);
+  });
+
+  // JSON Kopyala
+  document.getElementById('calibExport').addEventListener('click', () => {
+    const json = JSON.stringify(CALIB, null, 2);
+    const done = () => {
+      fab.textContent = '✓';
+      fab.classList.add('on');
+      setTimeout(() => { fab.textContent = '⚙'; fab.classList.remove('on'); }, 1500);
+      showToast('JSON panoya kopyalandı', '📋', 1800);
+    };
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(json).then(done).catch(() => window.prompt('JSON:', json));
+    } else {
+      window.prompt('JSON:', json);
+    }
+  });
+
+  // Sıfırla
+  document.getElementById('calibReset').addEventListener('click', () => {
+    if (!confirm('Kalibrasyon sıfırlanacak. Emin misin?')) return;
+    CALIB = {};
+    try { localStorage.removeItem(CALIB_KEY); } catch (e) {}
+    location.reload();
+  });
+
+  // Klavye ile ince ayar
+  document.addEventListener('keydown', (e) => {
+    if (!panel.classList.contains('open')) return;
+    if (e.target.tagName === 'INPUT') return;
+
+    const step = e.shiftKey ? 0.1 : 0.01;
+    let type = null, idx = 0, delta = 0;
+
+    if (e.key === 'ArrowLeft')       { type = 'pos'; idx = 0; delta = -step; }
+    else if (e.key === 'ArrowRight') { type = 'pos'; idx = 0; delta =  step; }
+    else if (e.key === 'ArrowUp')    { type = 'pos'; idx = 1; delta =  step; }
+    else if (e.key === 'ArrowDown')  { type = 'pos'; idx = 1; delta = -step; }
+    else if (e.key === 'PageUp')     { type = 'pos'; idx = 2; delta =  step; }
+    else if (e.key === 'PageDown')   { type = 'pos'; idx = 2; delta = -step; }
+    else if (e.key === '[')          { type = 'scale'; delta = -step; }
+    else if (e.key === ']')          { type = 'scale'; delta =  step; }
+    else return;
+
+    e.preventDefault();
+    const g = STATE.loadedModels[activeRegion];
+    if (!g) return;
+    if (!CALIB[activeRegion]) CALIB[activeRegion] = {};
+    const ov = CALIB[activeRegion];
+    const def = DEFAULTS[activeRegion];
+
+    if (type === 'pos') {
+      if (!ov.pos) ov.pos = def.pos.slice();
+      ov.pos[idx] += delta;
+      g.position.set(ov.pos[0], ov.pos[1], ov.pos[2]);
+    } else if (type === 'scale') {
+      const cur = typeof ov.scale === 'number' ? ov.scale : def.scale;
+      ov.scale = Math.max(0.05, cur + delta);
+      g.scale.setScalar(ov.scale);
+    }
+    renderControls();
+  });
+
+  updateTabs();
+  renderControls();
+
+  console.log('%c⚙ Kalibrasyon modu hazır — ⚙ butonu veya Ctrl+Shift+C', 'color:#38bdf8;font-weight:bold');
+})();
+</script>
+
+</body>
+</html>
